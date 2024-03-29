@@ -1,0 +1,3556 @@
+Basic EDA for high-throughput data
+Basic Exploratory Data Analysis
+An under-appreciated advantage of working with high-throughput data is that problems with the data are sometimes more easily exposed than with low-throughput data. The fact that we have thousands of measurements permits us to see problems that are not apparent when only a few measurements are available. A powerful way to detect these problems is with exploratory data analysis (EDA). Here we review some of the plots that allow us to detect quality problems.
+
+Volcano plots
+Here we will use the results obtained from applying t-test to data from a gene expression dataset:
+
+library(genefilter)
+library(GSE5859Subset)
+data(GSE5859Subset)
+g <- factor(sampleInfo$group)
+results <- rowttests(geneExpression,g)
+pvals <- results$p.value
+And we also generate p-values from a dataset for which we know the null is true:
+
+m <- nrow(geneExpression)
+n <- ncol(geneExpression)
+randomData <- matrix(rnorm(n*m),m,n)
+nullpvals <- rowttests(randomData,g)$p.value
+As we described earlier, reporting only p-values is a mistake when we can also report effect sizes. With high-throughput data, we can visualize the results by making a volcano plot. The idea behind a volcano plot is to show these for all features. In the y-axis we plot -log (base 10) p-values and on the x-axis we plot the effect size. By using - log (base 10), the “highly significant” features appear at the top of the plot. Using log also permits us to better distinguish between small and very small p-values, for example 0.01 and 106
+. Here is the volcano plot for our results above:
+
+plot(results$dm,-log10(results$p.value),
+     xlab="Effect size",ylab="- log (base 10) p-values")
+plot of chunk volcano_plot
+
+Many features with very small p-values, but small effect sizes as we see here, are sometimes indicative of problematic data.
+
+p-value Histograms
+Another plot we can create to get an overall idea of the results is to make histograms of p-values. When we generate completely null data the histogram follows a uniform distribution. With our original data set we see a higher frequency of smaller p-values.
+
+library(rafalib)
+mypar(1,2)
+hist(nullpvals,ylim=c(0,1400))
+hist(pvals,ylim=c(0,1400))
+P-value histogram. We show a simulated case in which all null hypotheses are true (left) and p-values from the gene expression described above.
+
+When we expect most hypothesis to be null and don’t see a uniform p-value distribution, it might be indicative of unexpected properties, such as correlated samples.
+
+If we permute the outcomes and calculate p-values then, if the samples are independent, we should see a uniform distribution. With these data we do not:
+
+permg <- sample(g)
+permresults <- rowttests(geneExpression,permg)
+hist(permresults$p.value)
+Histogram obtained after permuting labels.
+
+In a later chapter we will see that the columns in this dataset are not independent and thus the assumptions used to compute the p-values here are incorrect.
+
+Data boxplots and histograms
+With high-throughput data, we have thousands of measurements for each experimental unit. As mentioned earlier, this can help us detect quality issues. For example, if one sample has a completely different distribution than the rest, we might suspect there are problems. Although a complete change in distribution could be due to real biological differences, more often than not it is due to a technical problem. Here we load a large gene expression experiment available from Bioconductor. We “accidentally” use log instead of log2 on one of the samples.
+
+library(Biobase)
+library(GSE5859) 
+data(GSE5859) 
+ge <- exprs(e) ##ge for gene expression
+ge[,49] <- ge[,49]/log2(exp(1)) ##immitate error
+A quick look at a summary of the distribution using boxplots immediately highlights the mistake:
+
+library(rafalib)
+mypar(1,1)
+boxplot(ge,range=0,names=1:ncol(e),col=ifelse(1:ncol(ge)==49,1,2))
+Boxplot for log-scale expression for all samples.
+
+Note that the number of samples is a bit too large here, making it hard to see the boxes. One can instead simply show the boxplot summaries without the boxes:
+
+qs <- t(apply(ge,2,quantile,prob=c(0.05,0.25,0.5,0.75,0.95)))
+matplot(qs,type="l",lty=1)
+The 0.05, 0.25, 0.5, 0.75, and 0.95 quantiles are plotted for each sample.
+
+We refer to this figure as a kaboxplot because Karl Broman was the first we saw use it as an alternative to boxplots.
+
+We can also plot all the histograms. Because we have so much data, we create histograms using small bins, then smooth the heights of the bars and then plot smooth histograms. We re-calibrate the height of these smooth curves so that if a bar is made with base of size “unit” and height given by the curve at x0
+, the area approximates the number of points in region of size “unit” centered at x0
+:
+
+mypar(1,1)
+shist(ge,unit=0.5)
+Smooth histograms for each sample.
+
+MA plot
+Scatterplots and correlation are not the best tools to detect replication problems. A better measure of replication can be obtained from examining the differences between the values that should be the same. Therefore, a better plot is a rotation of the scatterplot containing the differences on the y-axis and the averages on the x-axis. This plot was originally named a Bland-Altman plot, but in genomics it is commonly referred to as an MA-plot. The name MA comes from plots of red log intensity minus (M) green intensities versus average (A) log intensities used with microarrays (MA) data.
+
+x <- ge[,1]
+y <- ge[,2]
+mypar(1,2)
+plot(x,y)
+plot((x+y)/2,x-y)
+Scatter plot (left) and M versus A plot (right) for the same data.
+
+Note that once we rotate the plot, the fact that these data have differences of about:
+
+sd(y-x)
+## [1] 0.2025465
+becomes immediate. The scatterplot shows very strong correlation, which is not necessarily informative here.
+
+We will later introduce dendograms, heatmaps, and multi-dimensional scaling plots.
+
+EDA for Highthroughput Exercises
+{pagebreak}
+
+Exercises
+We will be using a handful of Bioconductor packages. These are installed using the function biocLite which you can source from the web:
+
+source("http://www.bioconductor.org/biocLite.R")
+or you can run the bioc_install in the rafalib package.
+
+library(rafalib)
+bioc_install()
+Download and install the Bioconductor package SpikeInSubset and then load the library and the mas133 data:
+
+library(rafalib)
+install_bioc("SpikeInSubset")
+library(SpikeInSubset)
+data(mas133)
+Now make the following plot of the first two samples and compute the correlation:
+
+e <- exprs(mas133)
+plot(e[,1],e[,2],main=paste0("corr=",signif(cor(e[,1],e[,2]),3)),cex=0.5)
+k <- 3000
+b <- 1000 #a buffer
+polygon(c(-b,k,k,-b),c(-b,-b,k,k),col="red",density=0,border="red")
+What proportion of the points are inside the box?
+
+Now make the sample plot with log:
+
+ plot(log2(e[,1]),log2(e[,2]))
+ k <- log2(3000)
+ b <- log2(0.5)
+ polygon(c(b,k,k,b),c(b,b,k,k),col="red",density=0,border="red")
+What is an advantage of taking the log?
+
+A) The tails do not dominate the plot: 95% of data is not in a tiny section of plot.
+B) There are less points.
+C) There is exponential growth.
+D) We always take logs.
+Make an MA-plot:
+
+ e <- log2(exprs(mas133))
+ plot((e[,1]+e[,2])/2,e[,2]-e[,1],cex=0.5)
+The two samples we are plotting are replicates (they are random samples from the same batch of RNA). The correlation of the data was 0.997 in the original scale and 0.96 in the log-scale. High correlations are sometimes confused with evidence of replication. However, replication implies we get very small differences between the observations, which is better measured with distance or differences.
+
+What is the standard deviation of the log ratios for this comparison?
+
+How many fold changes above 2 do we see?
+
+——————————————————————————————————————————————————————————————————————
+Statistical Models
+Statistical Models
+“All models are wrong, but some are useful” -George E. P. Box
+
+When we see a p-value in the literature, it means a probability distribution of some sort was used to quantify the null hypothesis. Many times deciding which probability distribution to use is relatively straightforward. For example, in the tea tasting challenge we can use simple probability calculations to determine the null distribution. Most p-values in the scientific literature are based on sample averages or least squares estimates from a linear model and make use of the CLT to approximate the null distribution of their statistic as normal.
+
+The CLT is backed by theoretical results that guarantee that the approximation is accurate. However, we cannot always use this approximation, such as when our sample size is too small. Previously, we described how the sample average can be approximated as t-distributed when the population data is approximately normal. However, there is no theoretical backing for this assumption. We are now modeling. In the case of height, we know from experience that this turns out to be a very good model.
+
+But this does not imply that every dataset we collect will follow a normal distribution. Some examples are: coin tosses, the number of people who win the lottery, and US incomes. The normal is not the only parametric distribution that is available from modeling. Here we describe some of the most widely used parametric distributions and some of their uses in the life sciences. We also introduce the basics of Bayesian statistics, then give a specific example of the use of hierarchical models. For much more on parametric distributions please consult a Statistics textbook such as this one.
+
+The Binomial Distribution
+The first distribution we will describe is the binomial distribution. It reports the probability of observing S=k
+ successes in N
+ trails as
+
+Pr(S=k)=(Nk)pk(1−p)N−k
+with p
+ the probability of success. The best known example is coin tosses with S
+ the number of heads when tossing N
+ coins. In this example p=0.5
+.
+
+Note that S/N
+ is the average of independent random variables and thus the CLT tells us that S
+ is approximately normal when N
+ is large. This distribution has many applications in the life sciences. Recently, it has been used by the variant callers and genotypers applied to next generation sequencing. A special case of this distribution is approximated by the Poisson distribution which we describe next.
+
+The Poisson Distribution
+Since it is the sum of binary outcomes, the number of people that win the lottery follows a binomial distribution (we assume each person buys one ticket). The number of trials N
+ is the number of people that buy tickets and is usually very large. However, the number of people that win the lottery oscillates between 0 and 3, which implies the normal approximation does not hold. So why does CLT not hold? One can explain this mathematically, but the intuition is that with the sum of successes so close to and also constrained to be larger than 0, it is impossible for the distribution to be normal. Here is a quick simulation:
+
+p=10^-7 ##1 in 10,000,0000 chances of winning
+N=5*10^6 ##5,000,000 tickets bought
+winners=rbinom(1000,N,p) ##1000 is the number of different lotto draws
+tab=table(winners)
+plot(tab)
+Number of people that win the lottery obtained from Monte Carlo simulation.
+
+prop.table(tab)
+## winners
+##     0     1     2     3     4 
+## 0.615 0.286 0.090 0.007 0.002
+For cases like this, where N
+ is very large, but p
+ is small enough to make N×p
+ (call it λ
+) a number between 0 and, for example, 10, then S
+ can be shown to follow a Poisson distribution, which has a simple parametric form:
+
+Pr(S=k)=λkexp−λk!
+The Poisson distribution is commonly used in RNAseq analyses. Because we are sampling thousands of molecules and most genes represent a very small proportion of the totality of molecules, the Poisson distribution seems appropriate.
+
+So how does this help us? One way is that it provides insight about the statistical properties of summaries that are widely used in practice. For example, let’s say we only have one sample from each of a case and control RNAseq experiment and we want to report the genes with larges fold-changes. One insight that the Poisson model provides is that under the null that there are no differences, the statistical variability of this quantity depends on the total abundance of the gene. We can show this mathematically, but here is a quick simulation to demonstrate the point:
+
+N=10000##number of genes
+lambdas=2^seq(1,16,len=N) ##these are the true abundances of genes
+y=rpois(N,lambdas)##note that the null hypothesis is true for all genes
+x=rpois(N,lambdas) 
+ind=which(y>0 & x>0)##make sure no 0s due to ratio and log
+
+library(rafalib)
+splot(log2(lambdas),log2(y/x),subset=ind)
+MA plot of simulated RNAseq data. Replicated measurements follow a Poisson distribution.
+
+For lower values of lambda there is much more variability and, if we were to report anything with a fold change of 2 or more, the number of false positives would be quite high for low abundance genes.
+
+NGS experiments and the Poisson distribution
+In this section we will use the data stored in this dataset:
+
+library(parathyroidSE) ##available from Bioconductor
+## Warning: package 'GenomicRanges' was built under R version 3.2.2
+## Warning: package 'S4Vectors' was built under R version 3.2.2
+data(parathyroidGenesSE)
+se <- parathyroidGenesSE
+The data is contained in a SummarizedExperiment object, which we do not describe here. The important thing to know is that it includes a matrix of data, where each row is a genomic feature and each column is a sample. We can extract this data using the assay function. For this dataset, the value of a single cell in the data matrix is the count of reads which align to a given gene for a given sample. Thus, a similar plot to the one we simulated above with technical replicates reveals that the behavior predicted by the model is present in experimental data:
+
+x <- assay(se)[,23]
+y <- assay(se)[,24]
+ind=which(y>0 & x>0)##make sure no 0s due to ratio and log
+splot((log2(x)+log2(y))/2,log(x/y),subset=ind)
+MA plot of replicated RNAseq data.
+
+If we compute the standard deviations across four individuals, it is quite a bit higher than what is predicted by a Poisson model. Assuming most genes are differentially expressed across individuals, then, if the Poisson model is appropriate, there should be a linear relationship in this plot:
+
+library(rafalib)
+library(matrixStats)
+
+vars=rowVars(assay(se)[,c(2,8,16,21)]) ##we now these four are 4
+means=rowMeans(assay(se)[,c(2,8,16,21)]) ##different individulsa
+
+splot(means,vars,log="xy",subset=which(means>0&vars>0)) ##plot a subset of data
+abline(0,1,col=2,lwd=2)
+Variance versus mean plot. Summaries were obtained from the RNAseq data.
+
+The reason for this is that the variability plotted here includes biological variability, which the motivation for the Poisson does not include. The negative binomial distribution, which combines the sampling variability of a Poisson and biological variability, is a more appropriate distribution to model this type of experiment. The negative binomial has two parameters and permits more flexibility for count data. For more on the use of the negative binomial to model RNAseq data you can read this paper. The Poisson is a special case of the negative binomial distribution.
+
+Maximum Likelihood Estimation
+To illustrate the concept of maximum likelihood estimates (MLE), we use a relatively simple dataset containing palindrome locations in the HMCV genome. We read in the locations of the palindrome and then count the number of palindromes in each 4,000 basepair segments.
+
+datadir="http://www.biostat.jhsph.edu/bstcourse/bio751/data"
+x=read.csv(file.path(datadir,"hcmv.csv"))[,2]
+
+breaks=seq(0,4000*round(max(x)/4000),4000)
+tmp=cut(x,breaks)
+counts=table(tmp)
+
+library(rafalib)
+mypar(1,1)
+hist(counts)
+Palindrome count histogram.
+
+The counts do appear to follow a Poisson distribution. But what is the rate λ
+ ? The most common approach to estimating this rate is maximum likelihood estimation. To find the maximum likelihood estimate (MLE), we note that these data are independent and the probability of observing the values we observed is:
+
+Pr(X1=k1,…,Xn=kn;λ)=∏i=1nλki/ki!exp(−λ)
+The MLE is the value of λ
+ that maximizes the likelihood:.
+
+L(λ;X1=k1,…,Xn=k1)=exp{∑i=1nlogPr(Xi=ki;λ)}
+In practice, it is more convenient to maximize the log-likelihood which is the summation that is exponentiated in the expression above. Below we write code that computes the log-likelihood for any λ
+ and use the function optimize to find the value that maximizes this function (the MLE). We show a plot of the log-likelihood along with vertical line showing the MLE.
+
+l<-function(lambda) sum(dpois(counts,lambda,log=TRUE)) 
+
+lambdas<-seq(3,7,len=100)
+ls <- exp(sapply(lambdas,l))
+
+plot(lambdas,ls,type="l")
+
+mle=optimize(l,c(0,10),maximum=TRUE)
+abline(v=mle$maximum)
+Likelihood versus lambda.
+
+If you work out the math and do a bit of calculus, you realize that this is a particularly simple example for which the MLE is the average.
+
+print( c(mle$maximum, mean(counts) ) )
+## [1] 5.157894 5.157895
+Note that a plot of observed counts versus counts predicted by the Poisson shows that the fit is quite good in this case:
+
+theoretical<-qpois((seq(0,99)+0.5)/100,mean(counts))
+
+qqplot(theoretical,counts)
+abline(0,1)
+Observed counts versus theoretical Poisson counts.
+
+We therefore can model the palindrome count data with a Poisson with λ=5.16
+.
+
+Distributions for Positive Continuous Values
+Different genes vary differently across biological replicates. Later, in the hierarchical models chapter, we will describe one of the most influential statistical methods in the analysis of genomics data. This method provides great improvements over naive approaches to detecting differentially expressed genes. This is achieved by modeling the distribution of the gene variances. Here we describe the parametric model used in this method.
+
+We want to model the distribution of the gene-specific standard errors. Are they normal? Keep in mind that we are modeling the population standard errors so CLT does not apply, even though we have thousands of genes.
+
+As an example, we use an experimental data that included both technical and biological replicates for gene expression measurements on mice. We can load the data and compute the gene specific sample standard error for both the technical replicates and the biological replicates
+
+library(Biobase) ##available from Bioconductor
+library(maPooling) ##available from course github repo
+
+data(maPooling)
+pd=pData(maPooling)
+
+##determin which samples are bio reps and which are tech reps
+strain=factor(as.numeric(grepl("b",rownames(pd))))
+pooled=which(rowSums(pd)==12 & strain==1)
+techreps=exprs(maPooling[,pooled])
+individuals=which(rowSums(pd)==1 & strain==1)
+
+##remove replicates
+individuals=individuals[-grep("tr",names(individuals))]
+bioreps=exprs(maPooling)[,individuals]
+
+###now compute the gene specific standard deviations
+library(matrixStats)
+techsds=rowSds(techreps)
+biosds=rowSds(bioreps)
+We can now explore the sample standard deviation:
+
+###now plot
+library(rafalib)
+mypar()
+shist(biosds,unit=0.1,col=1,xlim=c(0,1.5))
+shist(techsds,unit=0.1,col=2,add=TRUE)
+legend("topright",c("Biological","Technical"), col=c(1,2),lty=c(1,1))
+Histograms of biological variance and technical variance.
+
+An important observation here is that the biological variability is substantially higher than the technical variability. This provides strong evidence that genes do in fact have gene-specific biological variability.
+
+If we want to model this variability, we first notice that the normal distribution is not appropriate here since the right tail is rather large. Also, because SDs are strictly positive, there is a limitation to how symmetric this distribution can be. A qqplot shows this very clearly:
+
+qqnorm(biosds)
+qqline(biosds)
+Normal qq-plot for sample standard deviations.
+
+There are parametric distributions that posses these properties (strictly positive and heavy right tails). Two examples are the gamma and F distributions. The density of the gamma distribution is defined by:
+
+f(x;α,β)=βαxα−1exp−βxΓ(α)
+It is defined by two parameters α
+ and β
+ that can, indirectly, control location and scale. They also control the shape of the distribution. For more on this distribution please refer to this book.
+
+Two special cases of the gamma distribution are the chi-squared and exponential distribution. We used the chi-squared earlier to analyze a 2x2 table data. For chi-square, we have α=ν/2
+ and β=2
+ with ν
+ the degrees of freedom. For exponential, we have α=1
+ and β=λ
+ the rate.
+
+The F-distribution comes up in analysis of variance (ANOVA). It is also always positive and has large right tails. Two parameters control its shape:
+
+f(x,d1,d2)=1B(d12,d22)(d1d2)d12xd12−1(1+d1d2x)−d1+d22
+with B
+ the beta function and d1
+ and d2
+ are called the degrees of freedom for reasons having to do with how it arises in ANOVA. A third parameter is sometimes used with the F-distribution, which is a scale parameter.
+
+Modeling the variance
+In a later section we will learn about a hierarchical model approach to improve estimates of variance. In these cases it is mathematically convenient to model the distribution of the variance σ2
+. The hierarchical model used here implies that the sample standard deviation of genes follows scaled F-statistics:
+
+s2∼s20Fd,d0
+with d
+ the degrees of freedom involved in computing s2
+ . For example, in a case comparing 3 versus 3, the degrees of freedom would be 4. This leaves two free parameters to adjust to the data. Here d
+ will control the location and s0
+ will control the scale. Below are some examples of F
+ distribution plotted on top of the histogram from the sample variances:
+
+library(rafalib)
+mypar(3,3)
+sds=seq(0,2,len=100)
+for(d in c(1,5,10)){
+  for(s0 in c(0.1, 0.2, 0.3)){
+    tmp=hist(biosds,main=paste("s_0 =",s0,"d =",d),xlab="sd",ylab="density",freq=FALSE,nc=100,xlim=c(0,1))
+    dd=df(sds^2/s0^2,11,d)
+    ##multiply by normalizing constant to assure same range on plot
+    k=sum(tmp$density)/sum(dd) 
+    lines(sds,dd*k,type="l",col=2,lwd=2)
+    }
+}
+Histograms of sample standard deviations and densities of estimated distributions.
+
+Now which s0
+ and d
+ fit our data best? This is a rather advanced topic as the MLE does not perform well for this particular distribution (we refer to Smyth (2004)). The Bioconductor limma package provides a function to estimate these parameters:
+
+library(limma)
+estimates=fitFDist(biosds^2,11)
+
+theoretical<- sqrt(qf((seq(0,999)+0.5)/1000, 11, estimates$df2)*estimates$scale)
+observed <- biosds
+The fitted models do appear to provide a reasonable approximation, as demonstrated by the qq-plot and histogram:
+
+mypar(1,2)
+qqplot(theoretical,observed)
+abline(0,1)
+tmp=hist(biosds,main=paste("s_0 =", signif(estimates[[1]],2), "d =", signif(estimates[[2]],2)), xlab="sd", ylab="density", freq=FALSE, nc=100, xlim=c(0,1), ylim=c(0,9))
+dd=df(sds^2/estimates$scale,11,estimates$df2)
+k=sum(tmp$density)/sum(dd) ##a normalizing constant to assure same area in plot
+lines(sds, dd*k, type="l", col=2, lwd=2)
+qq-plot (left) and density (right) demonstrate that model fits data well.
+
+
+Modeling Exercises
+{pagebreak}
+
+Exercises
+Suppose you have an urn with blue and red balls. If N
+ balls are selected at random with replacement (you put the ball back after you pick it), we can denote the outcomes as random variables X1,…,XN
+ that are 1 or 0. If the proportion of red balls is p
+ , then the distribution of each of these is Pr(Xi=1)=p
+.
+
+These are also called Bernoulli trials. These random variables are independent because we replace the balls. Flipping a coin is an example of this with p=0.5
+.
+
+You can show that the mean and variance are p
+ and p(1−p)
+ respectively. The binomial distribution gives us the distribution of the sum SN
+ of these random variables. The probability that we see k
+ red balls is given by:
+
+Pr(SN=k)=(Nk)pk(1−p)N−k
+In R, the function dbimom gives you this result. The function pbinom gives us Pr(SN≤k)
+.
+
+This equation has many uses in the life sciences. We give some examples below.
+
+The probability of conceiving a girl is 0.49. What is the probability that a family with 4 children has 2 girls and 2 boys (you can assume that the outcomes are independent)?
+
+Use what you learned in Question 1 to answer these questions:
+
+What is the probability that a family with 10 children has 6 girls and 4 boys (assume no twins)?
+
+The genome has 3 billion bases. About 20% are C, 20% are G, 30% are T, and 30% are A. Suppose you take a random interval of 20 bases, what is the probability that the GC-content (proportion of Gs of Cs) is strictly above 0.5 in this interval?
+
+The probability of winning the lottery is 1 in 175,223,510. If 20,000,000 people buy a ticket, what is the probability that more than one person wins?
+
+We can show that the binomial approximation is approximately normal when N
+ is large and p
+ is not too close to 0 or 1. This means that:
+
+SN−E(SN)Var(SN)−−−−−−−√
+is approximately normal with mean 0 and SD 1. Using the results for sums of independent random variables, we can show that E(SN)=Np
+ and Var(Sn)=Np(1−p)
+.
+
+The genome has 3 billion bases. About 20% are C, 20% are G, 30% are T, and 30% are A. Suppose you take a random interval of 20 bases, what is the exact probability that the GC-content (proportion of Gs of Cs) is greater than 0.35 and smaller or equal to 0.45 in this interval?
+
+For the question above, what is the normal approximation to the probability?
+
+Repeat exercise 4, but using an interval of 1000 bases. What is the difference (in absolute value) between the normal approximation and the exact distribution of the GC-content being greater than 0.35 and lesser or equal to 0.45?
+
+The Cs in our genomes can be methylated or unmethylated. Suppose we have a large (millions) group of cells in which a proportion p
+ of the Cs of interest are methylated. We break up the DNA of these cells and randomly select pieces and end up with N
+ pieces that contain the C we care about. This means that the probability of seeing k
+ methylated Cs is binomial:
+
+ exact = dbinom(k,N,p)
+We can approximate this with the normal distribution:
+
+ a <- (k+0.5 - N*p)/sqrt(N*p*(1-p))
+ b <- (k-0.5 - N*p)/sqrt(N*p*(1-p))
+ approx = pnorm(a) - pnorm(b)
+Compute the difference approx - exact for:
+
+ N <- c(5,10,50,100,500)
+ p <- seq(0,1,0.25)
+Compare the approximation and exact probability of the proportion of Cs being p
+, k=1,…,N−1
+ plotting the exact versus the approximation for each p
+ and N
+ combination.
+
+A) The normal approximation works well when p
+ is close to 0.5 even for small N=10
+B) The normal approximation breaks down when p
+ is close to 0 or 1 even for large N
+C) When N
+ is 100 all approximations are spot on.
+D) When p=0.01
+ the approximation are terrible for N=5,10,30
+ and only OK for N=100
+We saw in the previous question that when p
+ is very small, the normal approximation breaks down. If N
+ is very large, then we can use the Poisson approximation.
+
+Earlier we computed 1 or more people winning the lottery when the probability of winning was 1 in 175,223,510 and 20,000,000 people bought a ticket. Using the binomial, we can compute the probability of exactly two people winning to be:
+
+ N <- 20000000
+ p <- 1/175223510
+ dbinom(2,N,p)
+If we were to use the normal approximation, we would greatly underestimate this:
+
+ a <- (2+0.5 - N*p)/sqrt(N*p*(1-p))
+ b <- (2-0.5 - N*p)/sqrt(N*p*(1-p))
+ pnorm(a) - pnorm(b)
+To use the Poisson approximation here, use the rate λ=Np
+ representing the number of people per 20,000,000 that win the lottery. Note how much better the approximation is:
+
+ dpois(2,N*p)
+In this case. it is practically the same because N
+ is very large and Np
+ is not 0. These are the assumptions needed for the Poisson to work. What is the Poisson approximation for more than one person winning?
+
+Now we are going to explore if palindromes are over-represented in some part of the HCMV genome. Make sure you have the latest version of the dagdata, load the palindrome data from the Human cytomegalovirus genome, and plot locations of palindromes on the genome for this virus:
+
+library(dagdata)
+data(hcmv)
+plot(locations,rep(1,length(locations)),ylab="",yaxt="n")
+These palindromes are quite rare, and therefore p
+ is very small. If we break the genome into bins of 4000 basepairs, then we have Np
+ not so small and we might be able to use Poisson to model the number of palindromes in each bin:
+
+breaks=seq(0,4000*round(max(locations)/4000),4000)
+tmp=cut(locations,breaks)
+counts=as.numeric(table(tmp))
+So if our model is correct, counts should follow a Poisson distribution. The distribution seems about right:
+
+hist(counts)
+So let X1,…,Xn
+ be the random variables representing counts then Pr(Xi=k)=λk/k!exp(−λ)
+ and to fully describe this distribution, we need to know λ
+. For this we will use MLE. We can write the likelihood described in book in R. For example, for λ=4
+ we have:
+
+probs <- dpois(counts,4)
+likelihood <- prod(probs)
+likelihood
+Notice that it’s a tiny number. It is usually more convenient to compute log-likelihoods:
+
+logprobs <- dpois(counts,4,log=TRUE)
+loglikelihood <- sum(logprobs)
+loglikelihood
+Now write a function that takes λ
+ and the vector of counts as input and returns the log-likelihood. Compute this log-likelihood for lambdas = seq(0,15,len=300) and make a plot. What value of lambdas maximizes the log-likelihood?
+
+The point of collecting this dataset was to try to determine if there is a region of the genome that has a higher palindrome rate than expected. We can create a plot and see the counts per location:
+
+library(dagdata)
+data(hcmv)
+breaks=seq(0,4000*round(max(locations)/4000),4000)
+tmp=cut(locations,breaks)
+counts=as.numeric(table(tmp))
+binLocation=(breaks[-1]+breaks[-length(breaks)])/2
+plot(binLocation,counts,type="l",xlab=)
+What is the center of the bin with the highest count?
+
+What is the maximum count?
+
+Once we have identified the location with the largest palindrome count, we want to know if we could see a value this big by chance. If X
+ is a Poisson random variable with rate:
+
+lambda = mean(counts[ - which.max(counts) ])
+What is the probability of seeing a count of 14 or more?
+
+So we obtain a p-value smaller than 0.001 for a count of 14. Why is it problematic to report this p-value as strong evidence of a location that is different?
+A) Poisson in only an approximation.
+B) We selected the highest region out of 57 and need to adjust for multiple testing.
+C) λ
+ is an estimate, a random variable, and we didn’t take into account its variability.
+D) We don’t know the effect size.
+Use the Bonferonni correction to determine the p-value cut-off that guarantees a FWER of 0.05. What is this p-value cutoff?
+
+Create a qq-plot to see if our Poisson model is a good fit:
+
+ps <- (seq(along=counts) - 0.5)/length(counts)
+lambda <- mean( counts[ -which.max(counts)])
+poisq <- qpois(ps,lambda)
+plot(poisq,sort(counts))
+abline(0,1)
+How would you characterize this qq-plot
+
+A) Poisson is a terrible approximation.
+B) Poisson is a very good approximation except for one point that we actually think is a region of interest.
+C) There are too many 1s in the data.
+D) A normal distribution provides a better approximation.
+Load the tissuesGeneExpression data library
+
+library(tissuesGeneExpression)
+Now load this data and select the columns related to endometrium:
+
+library(genefilter)
+y = e[,which(tissue=="endometrium")]
+This will give you a matrix y with 15 samples. Compute the across sample variance for the first three samples. Then make a qq-plot to see if the data follow a normal distribution. Which of the following is true?
+
+A) With the exception of a handful of outliers, the data follow a normal distribution.
+B) The variance does not follow a normal distribution, but taking the square root fixes this.
+C) The normal distribution is not usable here: the left tail is over estimated and the right tail is underestimated.
+D) The normal distribution fits the data almost perfectly.
+Now fit an F-distribution with 14 degrees of freedom using the fitFDist function in the limma package:
+
+Now create a qq-plot of the observed sample variances versus the F-distribution quantiles. Which of the following best describes the qq-plot?
+
+A) The fitted F-distribution provides a perfect fit.
+B) If we exclude the lowest 0.1% of the data, the F-distribution provides a good fit.
+C) The normal distribution provided a better fit.
+D) If we exclude the highest 0.1% of the data, the F-distribution provides a good fit.
+
+Bayesian Statistics
+Bayesian Statistics
+One distinguishing characteristic of high-throughput data is that although we want to report on specific features, we observe many related outcomes. For example, we measure the expression of thousands of genes, or the height of thousands of peaks representing protein binding, or the methylation levels across several CpGs. However, most of the statistical inference approaches we have shown here treat each feature independently and pretty much ignores data from other features. We will learn how using statistical models provides power by modeling features jointly. The most successful of these approaches are what we refer to as hierarchical models, which we explain below in the context of Bayesian statistics.
+
+Bayes theorem
+We start by reviewing Bayes theorem. We do this using a hypothetical cystic fibrosis test as an example. Suppose a test for cystic fibrosis has an accuracy of 99%. We will use the following notation:
+
+Prob(+∣D=1)=0.99,Prob(−∣D=0)=0.99
+with +
+ meaning a positive test and D
+ representing if you actually have the disease (1) or not (0).
+
+Suppose we select a random person and they test positive, what is the probability that they have the disease? We write this as Prob(D=1∣+)?
+ The cystic fibrosis rate is 1 in 3,900 which implies that Prob(D=1)=0.0025
+. To answer this question we will use Bayes Theorem, which in general tells us that:
+
+Pr(A∣B)=Pr(B∣A)Pr(A)Pr(B)
+This equation applied to our problem becomes:
+
+Prob(D=1∣+)=P(+∣D=1)⋅P(D=1)Prob(+)=Prob(+∣D=1)⋅P(D=1)Prob(+∣D=1)⋅P(D=1)+Prob(+∣D=0)Prob(D=0)
+Plugging in the numbers we get:
+
+0.99⋅0.00250.99⋅0.0025+0.01⋅(.9975)=0.02
+This says that despite the test having 0.99 accuracy, the probability of having the disease given a positive test is only 0.02. This may appear counterintuitive to some. The reason this is the case is because we have to factor in the very rare probability that a person, chosen at random, has the disease. To illustrate this we run a Monte Carlo simulation.
+
+Simulation
+The following simulation is meant to help you visualize Bayes Theorem. We start by randomly selecting 1500 people from a population in which the disease in question has a 5% prevalence.
+
+set.seed(3)
+prev <- 1/20
+##Later, we are arranging 1000 people in 80 rows and 20 columns
+M <- 50 ; N <- 30
+##do they have the disease?
+d<-rbinom(N*M,1,p=prev)
+Now each person gets the test which is correct 90% of the time.
+
+accuracy <- 0.9
+test <- rep(NA,N*M)
+##do controls test positive?
+test[d==1]  <- rbinom(sum(d==1), 1, p=accuracy)
+##do cases test positive?
+test[d==0]  <- rbinom(sum(d==0), 1, p=1-accuracy)
+Because there are so many more controls than cases, even with a low false positive rate, we get more controls than cases in the group that tested positive (code not shown):
+
+Simulation demonstrating Bayes theorem. Top plot shows every individual with red denoting cases. Each one takes a test and with 90% gives correct answer. Those called positive (either correctly or incorrectly) are put in the bottom left pane. Those called negative in the bottom right.
+
+The proportions of red in the top plot shows Pr(D=1)
+. The bottom left shows Pr(D=1∣+)
+ and the bottom right shows Pr(D=0∣+)
+.
+
+Bayes in practice
+José Iglesias is a professional baseball player. In April 2013, when he was starting his career, he was performing rather well:
+
+Month	At Bats	H	AVG
+April	20	9	.450
+The batting average (AVG) statistic is one way of measuring success. Roughly speaking, it tells us the success rate when batting. An AVG of .450 means José has been successful 45% of the times he has batted (At Bats) which is rather high as we will see. Note, for example, that no one has finished a season with an AVG of .400 since Ted Williams did it in 1941! To illustrate the way hierarchical models are powerful, we will try to predict José’s batting average at the end of the season, after he has gone to bat over 500 times.
+
+With the techniques we have learned up to now, referred to as frequentist techniques, the best we can do is provide a confidence interval. We can think of outcomes from hitting as a binomial with a success rate of p
+. So if the success rate is indeed .450, the standard error of just 20 at bats is:
+
+.450(1−.450)20−−−−−−−−−−−−√=.111
+This means that our confidence interval is .450-.222 to .450+.222 or .228 to .672.
+
+This prediction has two problems. First, it is very large so not very useful. Also, it is centered at .450 which implies that our best guess is that this new player will break Ted William’s record. If you follow baseball, this last statement will seem wrong and this is because you are implicitly using a hierarchical model that factors in information from years of following baseball. Here we show how we can quantify this intuition.
+
+First, let’s explore the distribution of batting averages for all players with more than 500 at bats during the previous three seasons:
+
+Batting average histograms for 2010, 2011, and 2012.
+
+We note that the average player had an AVG of .275 and the standard deviation of the population of players was 0.027. So we can see already that .450 would be quite an anomaly since it is over six SDs away from the mean. So is José lucky or the best batter seen in the last 50 years? Perhaps it’s a combination of both. But how lucky and how good is he? If we become convinced that he is lucky, we should trade him to a team that trusts the .450 observation and is maybe overestimating his potential.
+
+The hierarchical model
+The hierarchical model provides a mathematical description of how we came to see the observation of .450. First, we pick a player at random with an intrinsic ability summarized by, for example, θ
+, then we see 20 random outcomes with success probability θ
+.
+
+θY∣θ∼N(μ,τ2) describes randomness in picking a player∼N(θ,σ2) describes randomness in the performance of this particular player
+Note the two levels (this is why we call them hierarchical): 1) Player to player variability and 2) variability due to luck when batting. In a Bayesian framework, the first level is called a prior distribution and the second the sampling distribution.
+
+Now, let’s use this model for José’s data. Suppose we want to predict his innate ability in the form of his true batting average θ
+. This would be the hierarchical model for our data:
+
+θY∣θ∼N(.275,.0272)∼N(θ,.1102)
+We now are ready to compute a posterior distribution to summarize our prediction of θ
+. The continuous version of Bayes rule can be used here to derive the posterior probability, which is the distribution of the parameter θ
+ given the observed data:
+
+fθ∣Y(θ∣Y)=fY∣θ(Y∣θ)fθ(θ)fY(Y)=fY∣θ(Y∣θ)fθ(θ)∫θfY∣θ(Y∣θ)fθ(θ)
+We are particularly interested in the θ
+ that maximizes the posterior probability fθ∣Y(θ∣Y)
+. In our case, we can show that the posterior is normal and we can compute the mean E(θ∣y)
+ and variance var(θ∣y)
+. Specifically, we can show the average of this distribution is the following:
+
+E(θ∣y)B=Bμ+(1−B)Y=μ+(1−B)(Y−μ)=σ2σ2+τ2
+ It is a weighted average of the population average μ
+ and the observed data Y
+. The weight depends on the SD of the the population τ
+ and the SD of our observed data σ
+. This weighted average is sometimes referred to as shrinking because it shrinks estimates towards a prior mean. In the case of José Iglesias, we have:
+
+E(θ∣Y=.450)BE(θ∣Y=450)=B×.275+(1−B)×.450=.275+(1−B)(.450−.260)=.1102.1102+.0272=0.943≈.285
+The variance can be shown to be:
+
+var(θ∣y)=11/σ2+1/τ2=11/.1102+1/.0272=0.026
+So we started with a frequentist 95% confidence interval that ignored data from other players and summarized just José’s data: .450 ±
+ 0.220. Then we used an Bayesian approach that incorporated data from other players and other years to obtain a posterior probability. This is actually referred to as an empirical Bayes approach because we used data to construct the prior. From the posterior we can report what is called a 95% credible interval by reporting a region, centered at the mean, with a 95% chance of occurring. In our case, this turns out to be: .285 ±
+ 0.052.
+
+The Bayesian credible interval suggests that if another team is impressed by the .450 observation, we should consider trading José as we are predicting he will be just slightly above average. Interestingly, the Red Sox traded José to the Detroit Tigers in July. Here are the José Iglesias batting averages for the next five months.
+
+Month	At Bat	Hits	AVG
+April	20	9	.450
+May	26	11	.423
+June	86	34	.395
+July	83	17	.205
+August	85	25	.294
+September	50	10	.200
+Total w/o April	330	97	.293
+Although both intervals included the final batting average, the Bayesian credible interval provided a much more precise prediction. In particular, it predicted that he would not be as good the remainder of the season.
+
+Hierarchical Models
+Hierarchical Models
+In this section, we use the mathematical theory which describes an approach that has become widely applied in the analysis of high-throughput data. The general idea is to build a hierachichal model with two levels. One level describes variability across samples/units, and the other describes variability across features. This is similar to the baseball example in which the first level described variability across players and the second described the randomness for the success of one player. The first level of variation is accounted for by all the models and approaches we have described here, for example the model that leads to the t-test. The second level provides power by permitting us to “borrow” information from all features to inform the inference performed on each one.
+
+Here we describe one specific case that is currently the most widely used approach to inference with gene expression data. It is the model implemented by the limma Bioconductor package. This idea has been adapted to develop methods for other data types such as RNAseq by, for example, edgeR and DESeq2. This package provides an alternative to the t-test that greatly improves power by modeling the variance. While in the baseball example we modeled averages, here we model variances. Modelling variances requires more advanced math, but the concepts are practically the same. We motivate and demonstrate the approach with an example.
+
+Here is a volcano showing effect sizes and p-value from applying a t-test to data from an experiment running six replicated samples with 16 genes artificially made to be different in two groups of three samples each. These 16 genes are the only genes for which the alternative hypothesis is true. In the plot they are shown in blue.
+
+library(SpikeInSubset) ##Available from Bioconductor
+data(rma95)
+library(genefilter)
+fac <- factor(rep(1:2,each=3))
+tt <- rowttests(exprs(rma95),fac)
+smallp <- with(tt, p.value < .01)
+spike <- rownames(rma95) %in% colnames(pData(rma95))
+cols <- ifelse(spike,"dodgerblue",ifelse(smallp,"red","black"))
+
+with(tt, plot(-dm, -log10(p.value), cex=.8, pch=16,
+     xlim=c(-1,1), ylim=c(0,4.5),
+     xlab="difference in means",
+     col=cols))
+abline(h=2,v=c(-.2,.2), lty=2)
+Volcano plot for t-test comparing two groups. Spiked-in genes are denoted with blue. Among the rest of the genes, those with p-value < 0.01 are denoted with red.
+
+We cut-off the range of the y-axis at 4.5, but there is one blue point with a p-value smaller than 10−6
+. Two findings stand out from this plot. The first is that only one of the positives would be found to be significant with a standard 5% FDR cutoff:
+
+sum( p.adjust(tt$p.value,method = "BH")[spike] < 0.05)
+## [1] 1
+This of course has to do with the low power associated with a sample size of three in each group. The second finding is that if we forget about inference and simply rank the genes based on the size of the t-statistic, we obtain many false positives in any rank list of size larger than 1. For example, six of the top 10 genes ranked by t-statistic are false positives.
+
+table( top50=rank(tt$p.value)<= 10, spike) #t-stat and p-val rank is the same
+##        spike
+## top50   FALSE  TRUE
+##   FALSE 12604    12
+##   TRUE      6     4
+In the plot we notice that these are mostly genes for which the effect size is relatively small, implying that the estimated standard error is small. We can confirm this with a plot:
+
+tt$s <- apply(exprs(rma95), 1, function(row) 
+  sqrt(.5 * (var(row[1:3]) + var(row[4:6]) ) ) )
+with(tt, plot(s, -log10(p.value), cex=.8, pch=16,
+              log="x",xlab="estimate of standard deviation",
+              col=cols))
+p-values versus standard deviation estimates.
+
+Here is where a hierarchical model can be useful. If we can make an assumption about the distribution of these variances across genes, then we can improve estimates by “adjusting” estimates that are “too small” according to this distribution. In a previous section we described how the F-distribution approximates the distribution of the observed variances.
+
+s2∼s20Fd,d0
+Because we have thousands of data points, we can actually check this assumption and also estimate the parameters s0
+ and d0
+. This particular approach is referred to as empirical Bayes because it can be described as using data (empirical) to build the prior distribution (Bayesian approach).
+
+Now we apply what we learned with the baseball example to the standard error estimates. As before we have an observed value for each gene sg
+, a sampling distribution as a prior distribution. We can therefore compute a posterior distribution for the variance σ2g
+ and obtain the posterior mean. You can see the details of the derivation in this paper.
+
+E[σ2g∣sg]=d0s20+ds2gd0+d
+As in the baseball example, the posterior mean shrinks the observed variance s2g
+ towards the global variance s20
+ and the weights depend on the sample size through the degrees of freedom d
+ and, in this case, the shape of the prior distribution through d0
+.
+
+In the plot above we can see how the variance estimate shrink for 40 genes (code not shown):
+
+Illustration of how estimates shrink towards the prior expectation. Forty genes spanning the range of values were selected.
+
+An important aspect of this adjustment is that genes having a sample standard deviation close to 0 are no longer close to 0 (the shrink towards s0
+ ). We can now create a version of the t-test that instead of the sample standard deviation uses this posterior mean or “shrunken” estimate of the variance. We refer to these as moderated t-tests. Once we do this, the improvements can be seen clearly in the volcano plot:
+
+library(limma)
+fit <- lmFit(rma95, model.matrix(~ fac))
+ebfit <- ebayes(fit)
+limmares <- data.frame(dm=coef(fit)[,"fac2"], p.value=ebfit$p.value[,"fac2"])
+with(limmares, plot(dm, -log10(p.value),cex=.8, pch=16,
+     col=cols,xlab="difference in means",
+     xlim=c(-1,1), ylim=c(0,5)))
+abline(h=2,v=c(-.2,.2), lty=2)
+Volcano plot for moderated t-test comparing two groups. Spiked-in genes are denoted with blue. Among the rest of the genes, those with p-value < 0.01 are denoted with red.
+
+The number of false positives in the top 10 is now reduced to 2.
+
+table( top50=rank(limmares$p.value)<= 10, spike) 
+##        spike
+## top50   FALSE  TRUE
+##   FALSE 12608     8
+##   TRUE      2     8
+
+Hierarchical Models Exercises
+Exercises
+Load the following data (you can install it from Bioconductor) and extract the data matrix using exprs:
+
+library(Biobase)
+library(SpikeInSubset)
+data(rma95)
+y <- exprs(rma95)
+This dataset comes from an experiment in which RNA was obtained from the same background pool to create six replicate samples. Then RNA from 16 genes were artificially added in different quantities to each sample. These quantities (in picoMolars) and gene IDs are stored here:
+
+pData(rma95)
+These quantities where the same in the first three arrays and in the last three arrays. So we define two groups like this:
+
+g <- factor(rep(0:1,each=3))
+and create an index of which rows are associated with the artificially added genes:
+
+spike <- rownames(y) %in% colnames(pData(rma95))
+Only these 16 genes are diferentially expressed since the six samples differ only due to sampling (they all come from the same background pool of RNA).
+
+Perform a t-test on each gene using the rowttest function.
+
+What proportion of genes with a p-value < 0.01 (no multiple comparison correction) are not part of the artificially added (false positive)?
+
+Now compute the within group sample standard deviation for each gene (you can use group 1). Based on the p-value cut-off, split the genes into true positives, false positives, true negatives and false negatives. Create a boxplot comparing the sample SDs for each group. Which of the following best describes the boxplot?
+A) The standard deviation is similar across all groups.
+B) On average, the true negatives have much larger variability.
+C) The false negatives have larger variability.
+D) The false positives have smaller standard deviation.
+In the previous two questions, we observed results consistent with the fact that the random variability associated with the sample standard deviation leads to t-statistics that are large by chance.
+
+The sample standard deviation we use in the t-test is an estimate and with just a pair of triplicate samples, the variability associated with the denominator in the t-test can be large.
+
+The following steps perform the basic limma analysis. We specify coef=2 because we are interested in the difference between groups, not the intercept. The eBayes step uses a hierarchical model that provides a new estimate of the gene specific standard error.
+
+ library(limma)
+ fit <- lmFit(y, design=model.matrix(~ g))
+ colnames(coef(fit))
+ fit <- eBayes(fit)
+Here is a plot of the original, new, hierarchical models based estimate versus the sample based estimate:
+
+ sampleSD = fit$sigma
+ posteriorSD = sqrt(fit$s2.post)
+Which best describes what the hierarchical model does?
+
+A) Moves all the estimates of standard deviation closer to 0.12.
+B) Increases the estimates of standard deviation to increase t.
+C) Decreases the estimate of standard deviation.
+D) Decreases the effect size estimates.
+Use these new estimates of standard deviation in the denominator of the t-test and compute p-values. You can do it like this:
+
+ library(limma)
+ fit = lmFit(y, design=model.matrix(~ g))
+ fit = eBayes(fit)
+ ##second coefficient relates to diffences between group
+ pvals = fit$p.value[,2] 
+What proportion of genes with a p-value < 0.01 (no multiple comparison correction) are not part of the artificially added (false positive)?
+
+Compare to the previous volcano plot and notice that we no longer have small p-values for genes with small effect sizes.
+
+Distance lecture
+Distance and Dimension Reduction
+Introduction
+The concept of distance is quite intuitive. For example, when we cluster animals into subgroups, we are implicitly defining a distance that permits us to say what animals are “close” to each other.
+
+Clustering of animals
+
+Many of the analyses we perform with high-dimensional data relate directly or indirectly to distance. Many clustering and machine learning techniques rely on being able to define distance, using features or predictors. For example, to create heatmaps, which are widely used in genomics and other highthroughput fields, a distance is computed explicitly.
+
+Example of heatmap
+
+Image Source: Heatmap, Gaeddal, 01.28.2007
+
+In these plots the measurements, which are stored in a matrix, are represented with colors after the columns and rows have been clustered. (A side note: red and green, a common color theme for heatmaps, are two of the most difficult colors for many color-blind people to discern.) Here we will learn the necessary mathematics and computing skills to understand and create heatmaps. We start by reviewing the mathematical definition of distance.
+
+Euclidean Distance
+As a review, let’s define the distance between two points, A
+ and B
+, on a Cartesian plane.
+
+
+
+The euclidean distance between A
+ and B
+ is simply:
+
+(Ax−Bx)2+(Ay−By)2−−−−−−−−−−−−−−−−−−−−√
+Distance in High Dimensions
+We introduce a dataset with gene expression measurements for 22,215 genes from 189 samples. The R objects can be downloaded like this:
+
+library(devtools)
+install_github("genomicsclass/tissuesGeneExpression")
+The data represent RNA expression levels for eight tissues, each with several individuals.
+
+library(tissuesGeneExpression)
+data(tissuesGeneExpression)
+dim(e) ##e contains the expression data
+## [1] 22215   189
+table(tissue) ##tissue[i] tells us what tissue is represented by e[,i]
+## tissue
+##  cerebellum       colon endometrium hippocampus      kidney       liver 
+##          38          34          15          31          39          26 
+##    placenta 
+##           6
+We are interested in describing distance between samples in the context of this dataset. We might also be interested in finding genes that behave similarly across samples.
+
+To define distance, we need to know what the points are since mathematical distance is computed between points. With high dimensional data, points are no longer on the Cartesian plane. Instead they are in higher dimensions. For example, sample i
+ is defined by a point in 22,215 dimensional space: (Y1,i,…,Y22215,i)⊤
+. Feature g
+ is defined by a point in 189 dimensions (Yg,189,…,Yg,189)⊤
+Once we define points, the Euclidean distance is defined in a very similar way as it is defined for two dimensions. For instance, the distance between two samples i
+ and j
+ is:
+
+dist(i,j)=∑g=122215(Yg,i−Yg,j)2−−−−−−−−−−−−−⎷
+and the distance between two features h
+ and g
+ is:
+
+dist(h,g)=∑i=1189(Yh,i−Yg,i)2−−−−−−−−−−−−−⎷
+Distance with matrix algebra
+The distance between samples i
+ and j
+ can be written as
+
+dist(i,j)=(Yi−Yj)⊤(Yi−Yj)
+with Yi
+ and Yj
+ columns i
+ and j
+. This result can be very convenient in practice as computations can be made much faster using matrix multiplication.
+
+Examples
+We can now use the formulas above to compute distance. Let’s compute distance between samples 1 and 2, both kidneys, and then to sample 87, a colon.
+
+x <- e[,1]
+y <- e[,2]
+z <- e[,87]
+sqrt(sum((x-y)^2))
+## [1] 85.8546
+sqrt(sum((x-z)^2))
+## [1] 122.8919
+As expected, the kidneys are closer to each other. A faster way to compute this is using matrix algebra:
+
+sqrt( crossprod(x-y) )
+##         [,1]
+## [1,] 85.8546
+sqrt( crossprod(x-z) )
+##          [,1]
+## [1,] 122.8919
+Now to compute all the distances at once, we have the function dist. Because it computes the distance between each row, and here we are interested in the distance between samples, we transpose the matrix
+
+d <- dist(t(e))
+class(d)
+## [1] "dist"
+Note that this produces an object of class dist and, to access the entries using row and column, indexes we need to coerce it into a matrix:
+
+as.matrix(d)[1,2]
+## [1] 85.8546
+as.matrix(d)[1,87]
+## [1] 122.8919
+It is important to remember that if we run dist on e, it will compute all pairwise distances between genes. This will try to create a 22215×22215
+ matrix that may crash your R sessions.
+Distance exercises
+Exercises
+If you have not done so already, install the data package tissueGeneExpression:
+
+library(devtools)
+install_github("genomicsclass/tissuesGeneExpression")
+The data represents RNA expression levels for eight tissues, each with several biological replictes. We call samples that we consider to be from the same population, such as liver tissue from different individuals, biological replicates:
+
+library(tissuesGeneExpression)
+data(tissuesGeneExpression)
+head(e)
+head(tissue)
+How many biological replicates for hippocampus?
+
+What is the distance between samples 3 and 45?
+
+What is the distance between gene 210486_at and 200805_at
+
+If I run the command (don’t run it!):
+
+ d = as.matrix( dist(e) )
+how many cells (number of rows times number of columns) will this matrix have?
+
+Compute the distance between all pair of samples:
+
+ d = dist( t(e) )
+Read the help file for dist.
+
+How many distances are stored in d? Hint: What is the length of d?
+
+Why is the answer to exercise 5 not ncol(e)^2?
+
+A) R made a mistake there.
+B) Distances of 0 are left out.
+C) Because we take advantage of symmetry: only lower triangular matrix is stored thus only ncol(e)*(ncol(e)-1)/2 values.
+D) Because it is equalnrow(e)^2
+
+Dimension Reduction Motivation
+Dimension Reduction Motivation
+Visualizing data is one of the most, if not the most, important step in the analysis of high-throughput data. The right visualization method may reveal problems with the experimental data that can render the results from a standard analysis, although typically appropriate, completely useless.
+
+We have shown methods for visualizing global properties of the columns of rows, but plots that reveal relationships between columns or between rows are more complicated due to the high dimensionality of data. For example, to compare each of the 189 samples to each other, we would have to create, for example, 17,766 MA-plots. Creating one single scatterplot of the data is impossible since points are very high dimensional.
+
+We will describe powerful techniques for exploratory data analysis based on dimension reduction. The general idea is to reduce the dataset to have fewer dimensions, yet approximately preserve important properties, such as the distance between samples. If we are able to reduce down to, say, two dimensions, we can then easily make plots. The technique behind it all, the singular value decomposition (SVD), is also useful in other contexts. Before introducing the rather complicated mathematics behind the SVD, we will motivate the ideas behind it with a simple example.
+
+Example: Reducing two dimensions to one
+We consider an example with twin heights. Here we simulate 100 two dimensional points that represent the number of standard deviations each individual is from the mean height. Each pair of points is a pair of twins:
+
+Simulated twin pair heights.
+
+To help with the illustration, think of this as high-throughput gene expression data with the twin pairs representing the N
+ samples and the two heights representing gene expression from two genes.
+
+We are interested in the distance between any two samples. We can compute this using dist. For example, here is the distance between the two orange points in the figure above:
+
+d=dist(t(y))
+as.matrix(d)[1,2]
+## [1] 1.140897
+What if making two dimensional plots was too complex and we were only able to make 1 dimensional plots. Can we, for example, reduce the data to a one dimensional matrix that preserves distances between points?
+
+If we look back at the plot, and visualize a line between any pair of points, the length of this line is the distance between the two points. These lines tend to go along the direction of the diagonal. We have seen before that we can “rotate” the plot so that the diagonal is in the x-axis by making a MA-plot instead:
+
+z1 = (y[1,]+y[2,])/2 #the sum 
+z2 = (y[1,]-y[2,])   #the difference
+
+z = rbind( z1, z2) #matrix now same dimensions as y
+
+thelim <- c(-3,3)
+mypar(1,2)
+
+plot(y[1,],y[2,],xlab="Twin 1 (standardized height)",ylab="Twin 2 (standardized height)",xlim=thelim,ylim=thelim)
+points(y[1,1:2],y[2,1:2],col=2,pch=16)
+
+plot(z[1,],z[2,],xlim=thelim,ylim=thelim,xlab="Average height",ylab="Differnece in height")
+points(z[1,1:2],z[2,1:2],col=2,pch=16)
+Twin height scatterplot (left) and MA-plot (right).
+
+Later, we will start using linear algebra to represent transformation of the data such as this. Here we can see that to get z we multiplied y by the matrix:
+
+A=(1/211/2−1)⟹z=Ay
+Remember that we can transform back by simply multiplying by A−1
+ as follows:
+
+A−1=(111/2−1/2)⟹y=A−1z
+Rotations
+In the plot above, the distance between the two orange points remains roughly the same, relative to the distance between other points. This is true for all pairs of points. A simple re-scaling of the transformation we performed above will actually make the distances exactly the same. What we will do is multiply by a scalar so that the standard deviations of each point is preserved. If you think of the columns of y as independent random variables with standard deviation σ
+, then note that the standard deviations of M
+ and A
+ are:
+
+sd[Z1]=sd[(Y1+Y2)/2]=12–√σ and sd[Z2]=sd[Y1−Y2]=2–√σ
+This implies that if we change the transformation above to:
+
+A=12–√(111−1)
+then the SD of the columns of Y
+ are the same as the variance of the columns Z
+. Also, notice that A−1A=I
+. We call matrices with this properties orthogonal and it guarantees the SD-preserving properties described above. The distances are now exactly preserved:
+
+A <- 1/sqrt(2)*matrix(c(1,1,1,-1),2,2)
+z <- A%*%y
+d <- dist(t(y))
+d2 <- dist(t(z))
+mypar(1,1)
+plot(as.numeric(d),as.numeric(d2)) #as.numeric turns distnaces into long vector
+abline(0,1,col=2)
+Distance computed from original data and after rotation is the same.
+
+We call this particular transformation a rotation of y.
+
+mypar(1,2)
+
+thelim <- c(-3,3)
+plot(y[1,],y[2,],xlab="Twin 1 (standardized height)",ylab="Twin 2 (standardized height)",xlim=thelim,ylim=thelim)
+points(y[1,1:2],y[2,1:2],col=2,pch=16)
+
+plot(z[1,],z[2,],xlim=thelim,ylim=thelim,xlab="Average height",ylab="Differnece in height")
+points(z[1,1:2],z[2,1:2],col=2,pch=16)
+Twin height scatterplot (left) and after rotation (right).
+
+The reason we applied this transformation in the first place was because we noticed that to compute the distances between points, we followed a direction along the diagonal in the original plot, which after the rotation falls on the horizontal, or the the first dimension of z. So this rotation actually achieves what we originally wanted: we can preserve the distances between points with just one dimension. Let’s remove the second dimension of z and recompute distances:
+
+d3 = dist(z[1,]) ##distance computed using just first dimension
+mypar(1,1)
+plot(as.numeric(d),as.numeric(d3)) 
+abline(0,1)
+Distance computed with just one dimension after rotation versus actual distance.
+
+The distance computed with just the one dimensions provides a very good approximation to the actual distance and a very useful dimension reduction: from 2 dimensions to 1. This first dimension of the transformed data is actually the first principal component. This idea motivates the use of principal component analysis (PCA) and the singular value decomposition (SVD) to achieve dimension reduction more generally.
+
+Important note on a difference to other explanations
+If you search the web for descriptions of PCA, you will notice a difference in notation to how we describe it here. This mainly stems from the fact that it is more common to have rows represent units. Hence, in the example shown here, Y
+ would be transposed to be an N×2
+ matrix. In statistics this is also the most common way to represent the data: individuals in the rows. However, for practical reasons, in genomics it is more common to represent units in the columns. For example, genes are rows and samples are columns. For this reason, in this book we explain PCA and all the math that goes with it in a slightly different way than it is usually done. As a result, many of the explanations you find for PCA start out with the sample covariance matrix usually denoted with X⊤X
+ and having cells representing covariance between two units. Yet for this to be the case, we need the rows of X
+ to represents units. So in our notation above, you would have to compute, after scaling, YY⊤
+ instead.
+
+Basically, if you want our explanations to match others you have to transpose the matrices we show here.
+
+Singular Value Decomposition
+Singular Value Decomposition
+In the previous section, we motivated dimension reduction and showed a transformation that permitted us to approximate the distance between two dimensional points with just one dimension. The singular value decomposition (SVD) is a generalization of the algorithm we used in the motivational section. As in the example, the SVD provides a transformation of the original data. This transformation has some very useful properties.
+
+The main result SVD provides is that we can write an m×n
+, matrix Y
+ as
+
+U⊤Y=DV⊤
+With:
+
+U
+ is an m×p
+ orthogonal matrix
+V
+ is an p×p
+ orthogonal matrix
+D
+ is an n×p
+ diagonal matrix
+with p=min(m,n)
+. U⊤
+ provides a rotation of our data Y
+ that turns out to be very useful because the variability (sum of squares to be precise) of the columns of U⊤Y=VD
+ are decreasing. Because U
+ is orthogonal, we can write the SVD like this:
+
+Y=UDV⊤
+In fact, this formula is much more commonly used. We can also write the transformation like this:
+
+YV=UD
+This transformation of Y
+ also results in a matrix with column of decreasing sum of squares.
+
+Applying the SVD to the motivating example we have:
+
+library(rafalib)
+library(MASS)
+n <- 100
+y <- t(mvrnorm(n,c(0,0), matrix(c(1,0.95,0.95,1),2,2)))
+s <- svd(y)
+We can immediately see that applying the SVD results in a transformation very similar to the one we used in the motivating example:
+
+round(sqrt(2) * s$u , 3)
+##        [,1]   [,2]
+## [1,] -0.974 -1.026
+## [2,] -1.026  0.974
+The plot we showed after the rotation, was showing what we call the principal components: the second plotted against the first. To obtain the principal components from the SVD, we simply need the columns of the rotation U⊤Y
+ :
+
+PC1 = s$d[1]*s$v[,1]
+PC2 = s$d[2]*s$v[,2]
+plot(PC1,PC2,xlim=c(-3,3),ylim=c(-3,3))
+Second PC plotted against first PC for the twins height data
+
+How is this useful?
+It is not immediately obvious how incredibly useful the SVD can be, so let’s consider some examples. In this example, we will greatly reduce the dimension of V
+ and still be able to reconstruct Y
+.
+
+Let’s compute the SVD on the gene expression table we have been working with. We will take a subset of 100 genes so that computations are faster.
+
+library(tissuesGeneExpression)
+data(tissuesGeneExpression)
+set.seed(1)
+ind <- sample(nrow(e),500) 
+Y <- t(apply(e[ind,],1,scale)) #standardize data for illustration
+The svd command returns the three matrices (only the diagonal entries are returned for D
+)
+
+s <- svd(Y)
+U <- s$u
+V <- s$v
+D <- diag(s$d) ##turn it into a matrix
+First note that we can in fact reconstruct y:
+
+Yhat <- U %*% D %*% t(V)
+resid <- Y - Yhat
+max(abs(resid))
+## [1] 3.508305e-14
+If we look at the sum of squares of UD
+, we see that the last few are quite close to 0 (perhaps we have some replicated columns).
+
+plot(s$d)
+Entries of the diagonal of D for gene expression data.
+
+This implies that the last columns of V have a very small effect on the reconstruction of Y. To see this, consider the extreme example in which the last entry of V
+ is 0. In this case the last column of V
+ is not needed at all. Because of the way the SVD is created, the columns of V
+, have less and less influence on the reconstruction of Y
+. You commonly see this described as “explaining less variance”. This implies that for a large matrix, by the time you get to the last columns, it is possible that there is not much left to “explain” As an example, we will look at what happens if we remove the four last columns:
+
+k <- ncol(U)-4
+Yhat <- U[,1:k] %*% D[1:k,1:k] %*% t(V[,1:k])
+resid <- Y - Yhat 
+max(abs(resid))
+## [1] 3.508305e-14
+The largest residual is practically 0, meaning that we Yhat is practically the same as Y, yet we need 4 less dimensions to transmit the information.
+
+By looking at d
+, we can see that, in this particular dataset, we can obtain a good approximation keeping only 94 columns. The following plots are useful for seeing how much of the variability is explained by each column:
+
+plot(s$d^2/sum(s$d^2)*100,ylab="Percent variability explained")
+Percent variance explained by each principal component of gene expression data.
+
+We can also make a cumulative plot:
+
+plot(cumsum(s$d^2)/sum(s$d^2)*100,ylab="Percent variability explained",ylim=c(0,100),type="l")
+Cumulative variance explained by principal components of gene expression data.
+
+Although we start with 189 dimensions, we can approximate Y
+ with just 95:
+
+k <- 95 ##out a possible 189
+Yhat <- U[,1:k] %*% D[1:k,1:k] %*% t(V[,1:k])
+resid <- Y - Yhat
+boxplot(resid,ylim=quantile(Y,c(0.01,0.99)),range=0)
+Residuals from comparing a reconstructed gene expression table using 95 PCs to the original data with 189 dimensions.
+
+Therefore, by using only half as many dimensions, we retain most of the variability in our data:
+
+var(as.vector(resid))/var(as.vector(Y))
+## [1] 0.04076899
+We say that we explain 96% of the variability.
+
+Note that we can compute this proportion from D
+:
+
+1-sum(s$d[1:k]^2)/sum(s$d^2)
+## [1] 0.04076899
+The entries of D
+ therefore tell us how much each PC contributes in term of variability explained.
+
+Highly correlated data
+To help understand how the SVD works, we construct a dataset with two highly correlated columns.
+
+For example:
+
+m <- 100
+n <- 2
+x <- rnorm(m)
+e <- rnorm(n*m,0,0.01)
+Y <- cbind(x,x)+e
+cor(Y)
+##           x         x
+## x 1.0000000 0.9998873
+## x 0.9998873 1.0000000
+In this case, the second column adds very little “information” since all the entries of Y[,1]-Y[,2] are close to 0. Reporting rowMeans(Y) is even more efficient since Y[,1]-rowMeans(Y) and Y[,2]-rowMeans(Y) are even closer to 0. rowMeans(Y) turns out to be the information represented in the first column on U
+. The SVD helps us notice that we explain almost all the variability with just this first column:
+
+d <- svd(Y)$d
+d[1]^2/sum(d^2)
+## [1] 0.9999441
+In cases with many correlated columns, we can achieve great dimension reduction:
+
+m <- 100
+n <- 25
+x <- rnorm(m)
+e <- rnorm(n*m,0,0.01)
+Y <- replicate(n,x)+e
+d <- svd(Y)$d
+d[1]^2/sum(d^2)
+## [1] 0.9999047
+
+SVD exercises
+{pagebreak}
+
+Exercises
+For these exercises we are again going to use:
+
+library(tissuesGeneExpression)
+data(tissuesGeneExpression)
+Before we start these exercises, it is important to reemphasize that when using the SVD, in practice the solution to SVD is not unique. This because UDV⊤=(−U)D(−V)⊤
+. In fact, we can flip the sign of each column of U
+ and, as long as we also flip the respective column in V
+, we will arrive at the same solution. Here is an example:
+
+s = svd(e)
+signflips = sample(c(-1,1),ncol(e),replace=TRUE)
+signflips
+Now we switch the sign of each column and check that we get the same answer. We do this using the function sweep. If x is a matrix and a is a vector then sweep(x,1,y,FUN="*") applies the function FUN to each row i FUN(x[i,],a[i]), in this case x[i,]*a[i]. If instead of 1 we use 2, sweep applies this to columns. To learn about sweep read ?sweep`.
+
+newu= sweep(s$u,2,signflips,FUN="*")
+newv= sweep(s$v,2,signflips,FUN="*" )
+identical( s$u %*% diag(s$d) %*% t(s$v), newu %*% diag(s$d) %*% t(newv))
+This is important to know because different implementations of the SVD algorithm may give different signs, which can lead to the same code resulting in different answers when run in different computer systems.
+
+Compute the SVD of e
+
+ s = svd(e)
+Now compute the mean of each row:
+
+ m = rowMeans(e)
+What is the correlation between the first column of U
+ and m?
+
+In exercise 1, we saw how the first column relates to the mean of the rows of e. If we change these means, the distances between columns do not change. For example, changing the means does not change the distances:
+
+ newmeans = rnorm(nrow(e)) ##random values we will add to create new means
+ newe = e+newmeans ##we change the means
+ sqrt(crossprod(e[,3]-e[,45]))
+ sqrt(crossprod(newe[,3]-newe[,45])) 
+So we might as well make the mean of each row 0, since it does not help us approximate the column distances. We will define y as the detrended e and recompute the SVD:
+
+ y = e - rowMeans(e)
+ s = svd(y)
+We showed that UDV⊤
+ is equal to y up to numerical error:
+
+ resid = y - s$u %*% diag(s$d) %*% t(s$v)
+ max(abs(resid))
+The above can be made more efficient in two ways. First, using the crossprod and, second, not creating a diagonal matrix. In R, we can multiply matrices x by vector a. The result is a matrix with rows i equal to x[i,]*a[i]. Run the following example to see this.
+
+ x=matrix(rep(c(1,2),each=5),5,2)
+ x*c(1:5)
+which is equivalent to:
+
+ sweep(x,1,1:5,"*")
+This means that we don’t have to convert s$d into a matrix.
+
+Which of the following gives us the same as diag(s$d)%*%t(s$v) ?
+
+A) s$d %*% t(s$v)
+B) s$d * t(s$v)
+C) t(s$d * s$v)
+D) s$v * s$d
+If we define vd = t(s$d * t(s$v)), then which of the following is not the same UDV⊤
+:
+A) tcrossprod(s$u,vd)
+B) s$u %*% s$d * t(s$v)
+C) s$u %*% (s$d * t(s$v) )
+D) tcrossprod( t( s$d*t(s$u)) , s$v)
+Let z = s$d * t(s$v). We showed derivation demonstrating that because U
+ is orthogonal, the distance between e[,3] and e[,45] is the same as the distance between y[,3] and y[,45] . which is the same as vd[,3] and vd[,45]
+
+ z = s$d * t(s$v)
+ ##d was deinfed in question 2.1.5
+ sqrt(crossprod(e[,3]-e[,45]))
+ sqrt(crossprod(y[,3]-y[,45]))
+ sqrt(crossprod(z[,3]-z[,45]))
+Note that the columns z have 189 entries, compared to 22,215 for e.
+
+What is the difference, in absolute value, between the actual distance:
+
+ sqrt(crossprod(e[,3]-e[,45]))
+and the approximation using only two dimensions of z ?
+
+How many dimensions do we need to use for the approximation in exercise 4 to be within 10%?
+
+Compute distances between sample 3 and all other samples.
+
+Recompute this distance using the 2 dimensional approximation. What is the Spearman correlation between this approximate distance and the actual distance?
+The last exercise shows how just two dimensions can be useful to get a rough idea about the actual distances.
+
+Projections
+Projections
+Now that we have described the concept of dimension reduction and some of the applications of SVD and principal component analysis, we focus on more details related to the mathematics behind these. We start with projections. A projection is a linear algebra concept that helps us understand many of the mathematical operations we perform on high-dimensional data. For more details, you can review projects in a linear algebra book. Here we provide a quick review and then provide some data analysis related examples.
+
+As a review, remember that projections minimize the distance between points and subspace.
+
+Illustration of projection
+
+In the figure above, the point on top is pointing to a point in space. In this particular cartoon, the space is two dimensional, but we should be thinking abstractly. The space is represented by the Cartesian plan and the line on which the little person stands is a subspace of points. The projection to this subspace is the place that is closest to the original point. Geometry tells us that we can find this closest point by dropping a perpendicular line (dotted line) from the point to the space. The little person is standing on the projection. The amount this person had to walk from the origin to the new projected point is referred to as the coordinate.
+
+For the explanation of projections, we will use the standard matrix algebra notation for points: y⃗ ∈RN
+ is a point in N
+-dimensional space and L⊂RN
+ is smaller subspace.
+
+Simple example with N=2
+If we let Y=(23)
+. We can plot it like this:
+
+mypar (1,1)
+plot(c(0,4),c(0,4),xlab="Dimension 1",ylab="Dimension 2",type="n")
+arrows(0,0,2,3,lwd=3)
+text(2,3," Y",pos=4,cex=3)
+Geometric representation of Y.
+
+We can immediately define a coordinate system by projecting this vector to the space defined by: (10)
+ (the x-axis) and (01)
+ (the y-axis). The projections of Y
+ to the subspace defined by these points are 2 and 3 respectively:
+
+Y=(23)=2(10)+3(01)
+We say that 2
+ and 3
+ are the coordinates and that (10)and(01)
+ are the bases.
+
+Now let’s define a new subspace. The red line in the plot below is subset L
+ defined by points satisfying cv⃗ 
+ with v⃗ =(21)⊤
+. The projection of y⃗ 
+ onto L
+ is the closest point on L
+ to y⃗ 
+. So we need to find the c
+ that minimizes the distance between y⃗ 
+ and cv⃗ =(2c,c)
+. In linear algebra, we learn that the difference between these points is orthogonal to the space so:
+
+(y⃗ −c^v⃗ )⋅v⃗ =0
+this implies that:
+
+y⃗ ⋅v⃗ −c^v⃗ ⋅v⃗ =0
+and:
+
+c^=y⃗ ⋅v⃗ v⃗ ⋅v⃗ 
+Here the dot ⋅
+ represents the dot product: x⃗ ⋅y⃗ =x1y1+…xnyn
+.
+
+The following R code confirms this equation works:
+
+mypar(1,1)
+plot(c(0,4),c(0,4),xlab="Dimension 1",ylab="Dimension 2",type="n")
+arrows(0,0,2,3,lwd=3)
+abline(0,0.5,col="red",lwd=3) #if x=2c and y=c then slope is 0.5 (y=0.5x)
+text(2,3," Y",pos=4,cex=3)
+y=c(2,3)
+x=c(2,1)
+cc = crossprod(x,y)/crossprod(x)
+segments(x[1]*cc,x[2]*cc,y[1],y[2],lty=2)
+text(x[1]*cc,x[2]*cc,expression(hat(Y)),pos=4,cex=3)
+Projection of Y onto new subspace.
+
+Note that if v⃗ 
+ was such that v⃗ ⋅v⃗ =1
+, then c^
+ is simply y⃗ ⋅v⃗ 
+ and the space L
+ does not change. This simplification is one reason we like orthogonal matrices.
+
+Example: The sample mean is a projection
+Let y⃗ ∈RN
+ and L⊂RN
+ is the space spanned by:
+
+v⃗ =⎛⎝⎜⎜1⋮1⎞⎠⎟⎟;L={cv⃗ ;c∈R}
+In this space, all components of the vectors are the same number, so we can think of this space as representing the constants: in the projection each dimension will be the same value. So what c
+ minimizes the distance between cv⃗ 
+ and y⃗ 
+ ?
+
+When talking about problems like this, we sometimes use 2 dimensional figures such as the one above. We simply abstract and think of y⃗ 
+ as a point in N−dimensions
+ and L
+ as a subspace defined by a smaller number of values, in this case just one: c
+.
+
+Getting back to our question, we know that the projection is:
+
+c^=y⃗ ⋅v⃗ v⃗ ⋅v⃗ 
+which in this case is the average:
+
+c^=y⃗ ⋅v⃗ v⃗ ⋅v⃗ =∑Ni=1Yi∑Ni=11=Y¯
+Here, it also would have been just as easy to use calculus:
+
+∂∂c∑i=1N(Yi−c)2=0⟹−2∑i=1N(Yi−c^)=0⟹
+Nc=∑i=1NYi⟹c^=Y¯
+Example: Regression is also a projection
+Let us give a slightly more complicated example. Simple linear regression can also be explained with projections. Our data Y
+ (we are no longer going to use the y⃗ 
+ notation) is again an N−dimensional
+ vector and our model predicts Yi
+ with a line β0+β1Xi
+. We want to find the β0
+ and β1
+ that minimize the distance between Y
+ and the space defined by:
+
+L={β0v⃗ 0+β1v⃗ 1;β⃗ =(β0,β1)∈R2}
+with:
+
+v⃗ 0=⎛⎝⎜⎜⎜⎜11⋮1⎞⎠⎟⎟⎟⎟ and v⃗ 1=⎛⎝⎜⎜⎜⎜X1X2⋮XN⎞⎠⎟⎟⎟⎟
+Our N×2
+ matrix X
+ is [v⃗ 0v⃗ 1]
+ and any point in L
+ can be written as Xβ⃗ 
+.
+
+The equation for the multidimensional version of orthogonal projection is:
+
+X⊤(y⃗ −Xβ⃗ )=0
+which we have seen before and gives us:
+
+X⊤Xβ^=X⊤y⃗ 
+β^=(X⊤X)−1X⊤y⃗ 
+And the projection to L
+ is therefore:
+
+
+Rotations
+Rotations
+One of the most useful applications of projections relates to coordinate rotations. In data analysis, simple rotations can result in easier to visualize and interpret data. We will describe the mathematics behind rotations and give some data analysis examples.
+
+In our previous section, we used the following example:
+
+Y=(23)=2(10)+3(01)
+and noted that 2
+ and 3
+ are the coordinates
+
+library(rafalib)
+mypar()
+plot(c(-2,4),c(-2,4),xlab="Dimension 1",ylab="Dimension 2",type="n",xaxt="n",yaxt="n",bty="n")
+text(rep(0,6),c(c(-2,-1),c(1:4)),as.character(c(c(-2,-1),c(1:4))),pos=2)
+text(c(c(-2,-1),c(1:4)),rep(0,6),as.character(c(c(-2,-1),c(1:4))),pos=1)
+abline(v=0,h=0)
+arrows(0,0,2,3,lwd=3)
+segments(2,0,2,3,lty=2)
+segments(0,3,2,3,lty=2)
+text(2,3," Y",pos=4,cex=3)
+plot of chunk unnamed-chunk-1
+
+However, mathematically we can represent the point (2,3)
+ with other linear combinations:
+
+Y=(23)=2.5(11)+−1(0.5−0.5)
+The new coordinates are:
+
+Z=(2.5−1)
+Graphically, we can see that the coordinates are the projections to the spaces defined by the new basis:
+
+library(rafalib)
+mypar()
+plot(c(-2,4),c(-2,4),xlab="Dimension 1",ylab="Dimension 2",type="n",xaxt="n",yaxt="n",bty="n")
+text(rep(0,6),c(c(-2,-1),c(1:4)),as.character(c(c(-2,-1),c(1:4))),pos=2)
+text(c(c(-2,-1),c(1:4)),rep(0,6),as.character(c(c(-2,-1),c(1:4))),pos=1)
+abline(v=0,h=0)
+abline(0,1,col="red")
+abline(0,-1,col="red")
+arrows(0,0,2,3,lwd=3)
+y=c(2,3)
+x1=c(1,1)##new basis
+x2=c(0.5,-0.5)##new basis
+c1 = crossprod(x1,y)/crossprod(x1)
+c2 = crossprod(x2,y)/crossprod(x2)
+segments(x1[1]*c1,x1[2]*c1,y[1],y[2],lty=2)
+segments(x2[1]*c2,x2[2]*c2,y[1],y[2],lty=2)
+text(2,3," Y",pos=4,cex=3)
+plot of chunk unnamed-chunk-2
+
+We can go back and forth between these two representations of (2,3)
+ using matrix multiplication.
+
+Y=AZ
+A−1Y=Z
+A=(110.5−0.5)⟹A−1=(0.510.5−1)
+Z
+ and Y
+ carry the same information, but in a different coordinate system.
+
+Example: Twin heights
+Here are 100 two dimensional points Y
+plot of chunk twin-heights
+
+Here are the rotations: Z=A−1Y
+plot of chunk twin-heights-rotated
+
+What we have done here is rotate the data so that the first coordinate of Z
+ is the average height, while the second is the difference between twin heights.
+
+We have used the singular value decomposition to find principal components. It is sometimes useful to think of the SVD as a rotation, for example U⊤Y
+, that gives us a new coordinate system DV⊤
+ in which the dimensions are ordered by how much variance they explain.
+
+Multidimensional scaling
+Multi-Dimensional Scaling Plots
+We will motivate multi-dimensional scaling (MDS) plots with a gene expression example. To simplify the illustration we will only consider three tissues:
+
+library(rafalib)
+library(tissuesGeneExpression)
+data(tissuesGeneExpression)
+colind <- tissue%in%c("kidney","colon","liver")
+mat <- e[,colind]
+group <- factor(tissue[colind])
+dim(mat)
+## [1] 22215    99
+As an exploratory step, we wish to know if gene expression profiles stored in the columns of mat show more similarity between tissues than across tissues. Unfortunately, as mentioned above, we can’t plot multi-dimensional points. In general, we prefer two-dimensional plots, but making plots for every pair of genes or every pair of samples is not practical. MDS plots become a powerful tool in this situation.
+
+The math behind MDS
+Now that we know about SVD and matrix algebra, understanding MDS is relatively straightforward. For illustrative purposes let’s consider the SVD decomposition:
+
+Y=UDV⊤
+and assume that the sum of squares of the first two columns U⊤Y=DV⊤
+ is much larger than sum of squares of all other columns. This can be written as: d1+d2≫d3+⋯+dn
+ with di
+ the i-th entry of the D
+ matrix. When this happens, we then have:
+
+Y≈[U1U2](d100d2)[V1V2]⊤
+This implies that column i
+ is approximately:
+
+Yi≈[U1U2](d100d2)(vi,1vi,2)=[U1U2](d1vi,1d2vi,2)
+If we define the following two dimensional vector…
+
+Zi=(d1vi,1d2vi,2)
+… then
+
+(Yi−Yj)⊤(Yi−Yj)≈{[U1U2](Zi−Zj)}⊤{[U1U2](Zi−Zj)}=(Zi−Zj)⊤[U1U2]⊤[U1U2](Zi−Zj)=(Zi−Zj)⊤(Zi−Zj)=(Zi,1−Zj,1)2+(Zi,2−Zj,2)2
+This derivation tells us that the distance between samples i
+ and j
+ is approximated by the distance between two dimensional points.
+
+(Yi−Yj)⊤(Yi−Yj)≈(Zi,1−Zj,1)2+(Zi,2−Zj,2)2
+Because Z
+ is a two dimensional vector, we can visualize the distances between each sample by plotting Z1
+ versus Z2
+ and visually inspect the distance between points. Here is this plot for our example dataset:
+
+s <- svd(mat-rowMeans(mat))
+PC1 <- s$d[1]*s$v[,1]
+PC2 <- s$d[2]*s$v[,2]
+mypar(1,1)
+plot(PC1,PC2,pch=21,bg=as.numeric(group))
+legend("bottomright",levels(group),col=seq(along=levels(group)),pch=15,cex=1.5)
+Multi-dimensional scaling (MDS) plot for tissue gene expression data.
+
+Note that the points separate by tissue type as expected. Now the accuracy of the approximation above depends on the proportion of variance explained by the first two principal components. As we showed above, we can quickly see this by plotting the variance explained plot:
+
+plot(s$d^2/sum(s$d^2))
+Variance explained for each principal component.
+
+Although the first two PCs explain over 50% of the variability, there is plenty of information that this plot does not show. However, it is an incredibly useful plot for obtaining, via visualization, a general idea of the distance between points. Also, notice that we can plot other dimensions as well to search for patterns. Here are the 3rd and 4th PCs:
+
+PC3 <- s$d[3]*s$v[,3]
+PC4 <- s$d[4]*s$v[,4]
+mypar(1,1)
+plot(PC3,PC4,pch=21,bg=as.numeric(group))
+legend("bottomright",levels(group),col=seq(along=levels(group)),pch=15,cex=1.5)
+Third and fourth principal components.
+
+Note that the 4th PC shows a strong separation within the kidney samples. Later we will learn about batch effects, which might explain this finding.
+
+cmdscale
+Although we used the svd functions above, there is a special function that is specifically made for MDS plots. It takes a distance object as an argument and then uses principal component analysis to provide the best approximation to this distance that can be obtained with k
+ dimensions. This function is more efficient because one does not have to perform the full SVD, which can be time consuming. By default it returns two dimensions, but we can change that through the parameter k which defaults to 2.
+
+d <- dist(t(mat))
+mds <- cmdscale(d)
+
+mypar()
+plot(mds[,1],mds[,2],bg=as.numeric(group),pch=21,
+     xlab="First dimension",ylab="Second dimension")
+legend("bottomleft",levels(group),col=seq(along=levels(group)),pch=15)
+MDS computed with cmdscale function. These two approaches are equivalent up to an arbitrary sign change.
+
+mypar(1,2)
+for(i in 1:2){
+  plot(mds[,i],s$d[i]*s$v[,i],main=paste("PC",i))
+  b = ifelse( cor(mds[,i],s$v[,i]) > 0, 1, -1)
+  abline(0,b) ##b is 1 or -1 depending on the arbitrary sign "flip"
+}
+Comparison of MDS first two PCs to SVD first two PCs.
+
+Why the arbitrary sign?
+The SVD is not unique because we can multiply any column of V
+ by -1 as long as we multiply the sample column of U
+ by -1. We can see this immediately by noting that:
+
+−1UD(−1)V⊤=UDV⊤
+Why we substract the mean
+In all calculations above we subtract the row means before we compute the singular value decomposition. If what we are trying to do is approximate the distance between columns, the distance between Yi
+ and Yj
+ is the same as the distance between Yi−μ
+ and Yj−μ
+ since the μ
+ cancels out when computing said distance:
+
+{(Yi−μ)−(Yj−μ)}⊤{(Yi−μ)−(Yj−μ)}={Yi−Yj}⊤{Yi−Yj}
+Because removing the row averages reduces the total variation, it can only make the SVD approximation better.
+
+MDS exercises
+{pagebreak}
+
+Exercises
+Using the z we computed in exercise 4 of the previous exercises:
+
+ library(tissuesGeneExpression)
+ data(tissuesGeneExpression)
+ y = e - rowMeans(e)
+ s = svd(y)
+ z = s$d * t(s$v)
+we can make an mds plot:
+
+ library(rafalib)
+ ftissue = factor(tissue)
+ mypar2(1,1)
+ plot(z[1,],z[2,],col=as.numeric(ftissue))
+ legend("topleft",levels(ftissue),col=seq_along(ftissue),pch=1)
+Now run the function cmdscale on the original data:
+
+ d = dist(t(e))
+ mds = cmdscale(d)
+What is the absolute value of the correlation between the first dimension of z and the first dimension in mds?
+
+What is the absolute value of the correlation between the second dimension of z and the second dimension in mds?
+
+Load the following dataset:
+
+ library(GSE5859Subset)
+ data(GSE5859Subset)
+Compute the svd and compute z.
+
+ s = svd(geneExpression-rowMeans(geneExpression))
+ z = s$d * t(s$v)
+Which dimension of z most correlates with the outcome sampleInfo$group ?
+
+What is this max correlation?
+
+Which dimension of z has the second highest correlation with the outcome sampleInfo$group?
+
+Note these measurements were made during two months:
+
+ sampleInfo$date
+We can extract the month this way:
+
+ month = format( sampleInfo$date, "%m")
+ month = factor( month)
+Which dimension of z has the second highest correlation with the outcome month
+
+What is this correlation?
+
+(Advanced) The same dimension is correlated with both the group and the date. The following are also correlated:
+
+ table(sampleInfo$g,month)
+So is this first dimension related directly to group or is it related only through the month? Note that the correlation with month is higher. This is related to batch effects which we will learn about later.
+
+In exercise 3 we saw that one of the dimensions was highly correlated to the sampleInfo$group. Now take the 5th column of U
+ and stratify by the gene chromosome. Remove chrUn and make a boxplot of the values of U5
+ stratified by chromosome.
+
+Which chromosome looks different from the rest? Copy and paste the name as it appears in geneAnnotation.
+
+Given the answer to the last exercise, any guesses as to what sampleInfo$group represents?
+
+Principal Components Analysis
+Principal Component Analysis
+We have already mentioned principal component analysis (PCA) above and noted its relation to the SVD. Here we provide further mathematical details.
+
+Example: Twin heights
+We started the motivation for dimension reduction with a simulated example and showed a rotation that is very much related to PCA.
+
+Twin heights scatter plot.
+
+Here we explain specifically what are the principal components (PCs).
+
+Let Y
+ be 2×N
+ matrix representing our data. The analogy is that we measure expression from 2 genes and each column is a sample. Suppose we are given the task of finding a 2×1
+ vector u1
+ such that u⊤1v1=1
+ and it maximizes (u⊤1Y)⊤(u⊤1Y)
+. This can be viewed as a projection of each sample or column of Y
+ into the subspace spanned by u1
+. So we are looking for a transformation in which the coordinates show high variability.
+
+Let’s try u=(1,0)⊤
+. This projection simply gives us the height of twin 1 shown in orange below. The sum of squares is shown in the title.
+
+mypar(1,1)
+plot(t(Y), xlim=thelim, ylim=thelim,
+     main=paste("Sum of squares :",round(crossprod(Y[,1]),1)))
+abline(h=0)
+apply(Y,2,function(y) segments(y[1],0,y[1],y[2],lty=2))
+## NULL
+points(Y[1,],rep(0,ncol(Y)),col=2,pch=16,cex=0.75)
+plot of chunk projection_not_PC1
+
+Can we find a direction with higher variability? How about:
+
+u=(1−1)
+ ? This does not satisfy u⊤u=1
+ so let’s instead try u=(1/2–√−1/2–√)
+u <- matrix(c(1,-1)/sqrt(2),ncol=1)
+w=t(u)%*%Y
+mypar(1,1)
+plot(t(Y),
+     main=paste("Sum of squares:",round(tcrossprod(w),1)),xlim=thelim,ylim=thelim)
+abline(h=0,lty=2)
+abline(v=0,lty=2)
+abline(0,-1,col=2)
+Z = u%*%w
+for(i in seq(along=w))
+  segments(Z[1,i],Z[2,i],Y[1,i],Y[2,i],lty=2)
+points(t(Z), col=2, pch=16, cex=0.5)
+Data projected onto space spanned by (1 0).
+
+This relates to the difference between twins, which we know is small. The sum of squares confirms this.
+
+Finally, let’s try:
+
+u=(1/2–√1/2–√)
+u <- matrix(c(1,1)/sqrt(2),ncol=1)
+w=t(u)%*%Y
+mypar()
+plot(t(Y), main=paste("Sum of squares:",round(tcrossprod(w),1)),
+     xlim=thelim, ylim=thelim)
+abline(h=0,lty=2)
+abline(v=0,lty=2)
+abline(0,1,col=2)
+points(u%*%w, col=2, pch=16, cex=1)
+Z = u%*%w
+for(i in seq(along=w))
+  segments(Z[1,i], Z[2,i], Y[1,i], Y[2,i], lty=2)
+points(t(Z),col=2,pch=16,cex=0.5)
+Data projected onto space spanned by first PC.
+
+This is a re-scaled average height, which has higher sum of squares. There is a mathematical procedure for determining which v
+ maximizes the sum of squares and the SVD provides it for us.
+
+The principal components
+The orthogonal vector that maximizes the sum of squares:
+
+(u⊤1Y)⊤(u⊤1Y)
+u⊤1Y
+ is referred to as the first PC. The weights u
+ used to obtain this PC are referred to as the loadings. Using the language of rotations, it is also referred to as the direction of the first PC, which are the new coordinates.
+
+To obtain the second PC, we repeat the exercise above, but for the residuals:
+
+r=Y−u⊤1Yv1
+The second PC is the vector with the following properties:
+
+v⊤2v2=1
+v⊤2v1=0
+and maximizes (rv2)⊤rv2
+.
+
+When Y
+ is N×m
+ we repeat to find 3rd, 4th, …, m-th PCs.
+
+prcomp
+We have shown how to obtain PCs using the SVD. However, R has a function specifically designed to find the principal components. In this case, the data is centered by default. The following function:
+
+pc <- prcomp( t(Y) )
+produces the same results as the SVD up to arbitrary sign flips:
+
+s <- svd( Y - rowMeans(Y) )
+mypar(1,2)
+for(i in 1:nrow(Y) ){
+  plot(pc$x[,i], s$d[i]*s$v[,i])
+}
+Plot showing SVD and prcomp give same results.
+
+The loadings can be found this way:
+
+pc$rotation
+##            PC1        PC2
+## [1,] 0.7072304  0.7069831
+## [2,] 0.7069831 -0.7072304
+which are equivalent (up to a sign flip) to:
+
+s$u
+##            [,1]       [,2]
+## [1,] -0.7072304 -0.7069831
+## [2,] -0.7069831  0.7072304
+The equivalent of the variance explained is included in the:
+
+pc$sdev
+## [1] 1.2542672 0.2141882
+component.
+
+We take the transpose of Y because prcomp assumes the previously discussed ordering: units/samples in row and features in columns.
+
+Running PCA and SVD in R
+In this unit, we will show how to perform principal component analysis (PCA) and singular value decomposition (SVD) in R, and how the two are related to each other. We will use the tissue gene expression dataset from the week 5 lectures and labs.
+
+# library(devtools) install_github('dagdata','genomicsclass')
+library(dagdata)
+data(tissuesGeneExpression)
+library(rafalib)
+## Loading required package: RColorBrewer
+group <- as.fumeric(tab$Tissue)
+First, the typical principal component analysis on the samples would be to transpose the data such that the samples are rows of the data matrix. The prcomp function can be used to return the principal components and other variables.
+
+x <- t(e)
+pc <- prcomp(x)
+# ?prcomp
+names(pc)
+## [1] "sdev"     "rotation" "center"   "scale"    "x"
+plot(pc$x[, 1], pc$x[, 2], col = group, main = "PCA", xlab = "PC1", ylab = "PC2")
+plot of chunk unnamed-chunk-2
+
+This PCA is equivalent to performing the SVD on the centered data, where the centering occurs on the columns (here genes). We can use the sweep function to perform arbitrary operations on the rows and columns of a matrix. The second argument specifies we want to operate on the columns (1 would be used for rows), and the third and fourth arguments specify that we want to subtract the column means.
+
+cx <- sweep(x, 2, colMeans(x), "-")
+sv <- svd(cx)
+names(sv)
+## [1] "d" "u" "v"
+plot(sv$u[, 1], sv$u[, 2], col = group, main = "SVD", xlab = "U1", ylab = "U2")
+plot of chunk unnamed-chunk-3
+
+So the columns of U from the SVD correspond to the principal components x in the PCA. Furthermore, the matrix V from the SVD is equivalent to the rotation matrix returned by prcomp.
+
+sv$v[1:5, 1:5]
+##            [,1]      [,2]      [,3]      [,4]       [,5]
+## [1,]  0.0046966 -0.013275  0.002087  0.017093  0.0006956
+## [2,] -0.0021623 -0.002212  0.001543 -0.003346 -0.0034159
+## [3,] -0.0030945  0.005870  0.001686  0.003890  0.0019032
+## [4,] -0.0007355 -0.002002 -0.002753  0.001776  0.0192205
+## [5,]  0.0010133  0.001215 -0.001561  0.003349 -0.0012380
+pc$rotation[1:5, 1:5]
+##                  PC1       PC2       PC3       PC4        PC5
+## 1007_s_at  0.0046966 -0.013275  0.002087  0.017093  0.0006956
+## 1053_at   -0.0021623 -0.002212  0.001543 -0.003346 -0.0034159
+## 117_at    -0.0030945  0.005870  0.001686  0.003890  0.0019032
+## 121_at    -0.0007355 -0.002002 -0.002753  0.001776  0.0192205
+## 1255_g_at  0.0010133  0.001215 -0.001561  0.003349 -0.0012380
+The diagonal elements of D from the SVD are proportional to the standard deviations returned by PCA. The difference is that the standard deviations from prcomp are sample standard deviations (prcomp returns unbiased estimates of sample variance, so with the n/(n−1)
+ correction). The elements of D are formed by taking the sum of the squares of the principal components but not dividing by the sample size.
+
+head(sv$d^2)
+## [1] 673418 285393 182527 127667 108576  81999
+head(pc$sdev^2)
+## [1] 3582.0 1518.0  970.9  679.1  577.5  436.2
+head(sv$d^2/(ncol(e) - 1))
+## [1] 3582.0 1518.0  970.9  679.1  577.5  436.2
+By dividing the variances by the sum, we get a plot of the ratio of variance explained by each principal component.
+
+plot(sv$d^2/sum(sv$d^2), xlim = c(0, 15), type = "b", pch = 16, xlab = "principal components", 
+    ylab = "variance explained")
+plot of chunk unnamed-chunk-6
+
+plot(sv$d^2/sum(sv$d^2), type = "b", pch = 16, xlab = "principal components", 
+    ylab = "variance explained")
+plot of chunk unnamed-chunk-6
+
+Note that, not centering the data before running svd results in a slightly different plot:
+
+svNoCenter <- svd(x)
+plot(pc$x[, 1], pc$x[, 2], col = group, main = "PCA", xlab = "PC1", ylab = "PC2")
+points(0, 0, pch = 3, cex = 4, lwd = 4)
+plot of chunk unnamed-chunk-7
+
+plot(svNoCenter$u[, 1], svNoCenter$u[, 2], col = group, main = "SVD not centered", 
+    xlab = "U1", ylab = "U2")
+plot of chunk unnamed-chunk-7
+
+SVD on (genes vs samples) and (samples vs genes)
+Finally, we show that the SVD on the data matrix where samples are columns – as used in the Surrogate Variable Analysis SVA – is equivalent to the SVD on the data matrix where the samples are rows, if no centering has been done.
+
+sv2 <- svd(t(e))
+plot(sv2$u[, 1], sv2$u[, 2], col = group, main = "samples vs genes (typical PCA)", 
+    xlab = "U1", ylab = "U2")
+plot of chunk unnamed-chunk-8
+
+sv1 <- svd(e)
+plot(sv1$v[, 1], sv1$v[, 2], col = group, main = "genes vs samples (SVA)", xlab = "V1", 
+    ylab = "V2")
+plot of chunk unnamed-chunk-8
+
+The question of which direction to center depends on what the focus of the analysis is. For comparing sample distances, as in the typical PCA plot, the rows are samples and the genes are centered. For finding genes which contribute to batch, as in the SVA model, the rows are genes and the samples are centered.
+
+Clustering
+Basic Machine Learning
+Machine learning is a very broad topic and a highly active research area. In the life sciences, much of what is described as “precision medicine” is an application of machine learning to biomedical data. The general idea is to predict or discover outcomes from measured predictors. Can we discover new types of cancer from gene expression profiles? Can we predict drug response from a series of genotypes? Here we give a very brief introductions to two major machine learning components: clustering and class prediction. There are many good resources to learn more about machine learning, for example this book.
+
+Clustering
+We will demonstrate the concepts and code needed to perform clustering analysis with the tissue gene expression data:
+
+library(tissuesGeneExpression)
+data(tissuesGeneExpression)
+To illustrate the main application of clustering in the life sciences, let’s pretend that we don’t know these are different tissues and are interested in clustering. The first step is to compute the distance between each sample:
+
+d <- dist( t(e) )
+
+Hierarchical clustering
+With the distance between each pair of samples computed, we need clustering algorithms to join them into groups. Hierarchical clustering is one of the many clustering algorithms available to do this. Each sample is assigned to its own group and then the algorithm continues iteratively, joining the two most similar clusters at each step, and continuing until there is just one group. While we have defined distances between samples, we have not yet defined distances between groups. There are various ways this can be done and they all rely on the individual pairwise distances. The helpfile for hclust includes detailed information.
+
+We can perform hierarchical clustering based on the distances defined above using the hclust function. This function returns an hclust object that describes the groupings that were created using the algorithm described above. The plot method represents these relationships with a tree or dendrogram:
+
+library(rafalib)
+mypar()
+hc <- hclust(d)
+hc
+## 
+## Call:
+## hclust(d = d)
+## 
+## Cluster method   : complete 
+## Distance         : euclidean 
+## Number of objects: 189
+plot(hc,labels=tissue,cex=0.5)
+Dendrogram showing hierarchical clustering of tissue gene expression data.
+
+Does this technique “discover” the clusters defined by the different tissues? In this plot, it is not easy to see the different tissues so we add colors by using the mypclust function from the rafalib package.
+
+myplclust(hc, labels=tissue, lab.col=as.fumeric(tissue), cex=0.5)
+Dendrogram showing hierarchical clustering of tissue gene expression data with colors denoting tissues.
+
+Visually, it does seem as if the clustering technique has discovered the tissues. However, hierarchical clustering does not define specific clusters, but rather defines the dendrogram above. From the dendrogram we can decipher the distance between any two groups by looking at the height at which the two groups split into two. To define clusters, we need to “cut the tree” at some distance and group all samples that are within that distance into groups below. To visualize this, we draw a horizontal line at the height we wish to cut and this defines that line. We use 120 as an example:
+
+myplclust(hc, labels=tissue, lab.col=as.fumeric(tissue),cex=0.5)
+abline(h=120)
+Dendrogram showing hierarchical clustering of tisuse gene expression data with colors denoting tissues. Horizontal line defines actual clusters.
+
+If we use the line above to cut the tree into clusters, we can examine how the clusters overlap with the actual tissues:
+
+hclusters <- cutree(hc, h=120)
+table(true=tissue, cluster=hclusters)
+##              cluster
+## true           1  2  3  4  5  6  7  8  9 10 11 12 13 14
+##   cerebellum   0  0  0  0 31  0  0  0  2  0  0  5  0  0
+##   colon        0  0  0  0  0  0 34  0  0  0  0  0  0  0
+##   endometrium  0  0  0  0  0  0  0  0  0  0 15  0  0  0
+##   hippocampus  0  0 12 19  0  0  0  0  0  0  0  0  0  0
+##   kidney       9 18  0  0  0 10  0  0  2  0  0  0  0  0
+##   liver        0  0  0  0  0  0  0 24  0  2  0  0  0  0
+##   placenta     0  0  0  0  0  0  0  0  0  0  0  0  2  4
+We can also ask cutree to give us back a given number of clusters. The function then automatically finds the height that results in the requested number of clusters:
+
+hclusters <- cutree(hc, k=8)
+table(true=tissue, cluster=hclusters)
+##              cluster
+## true           1  2  3  4  5  6  7  8
+##   cerebellum   0  0 31  0  0  2  5  0
+##   colon        0  0  0 34  0  0  0  0
+##   endometrium 15  0  0  0  0  0  0  0
+##   hippocampus  0 12 19  0  0  0  0  0
+##   kidney      37  0  0  0  0  2  0  0
+##   liver        0  0  0  0 24  2  0  0
+##   placenta     0  0  0  0  0  0  0  6
+In both cases we do see that, with some exceptions, each tissue is uniquely represented by one of the clusters. In some instances, the one tissue is spread across two tissues, which is due to selecting too many clusters. Selecting the number of clusters is generally a challenging step in practice and an active area of research.
+
+
+K-means
+We can also cluster with the kmeans function to perform k-means clustering. As an example, let’s run k-means on the samples in the space of the first two genes:
+
+set.seed(1)
+km <- kmeans(t(e[1:2,]), centers=7)
+names(km)
+## [1] "cluster"      "centers"      "totss"        "withinss"    
+## [5] "tot.withinss" "betweenss"    "size"         "iter"        
+## [9] "ifault"
+mypar(1,2)
+plot(e[1,], e[2,], col=as.fumeric(tissue), pch=16)
+plot(e[1,], e[2,], col=km$cluster, pch=16)
+Plot of gene expression for first two genes (order of appearance in data) with color representing tissue (left) and clusters found with kmeans (right).
+
+In the first plot, color represents the actual tissues, while in the second, color represents the clusters that were defined by kmeans. We can see from tabulating the results that this particular clustering exercise did not perform well:
+
+table(true=tissue,cluster=km$cluster)
+##              cluster
+## true           1  2  3  4  5  6  7
+##   cerebellum   0  1  8  0  6  0 23
+##   colon        2 11  2 15  4  0  0
+##   endometrium  0  3  4  0  0  0  8
+##   hippocampus 19  0  2  0 10  0  0
+##   kidney       7  8 20  0  0  0  4
+##   liver        0  0  0  0  0 18  8
+##   placenta     0  4  0  0  0  0  2
+This is very likely due to the fact the the first two genes are not informative regarding tissue type. We can see this in the first plot above. If we instead perform k-means clustering using all of the genes, we obtain a much improved result. To visualize this, we can use an MDS plot:
+
+km <- kmeans(t(e), centers=7)
+mds <- cmdscale(d)
+
+mypar(1,2)
+plot(mds[,1], mds[,2]) 
+plot(mds[,1], mds[,2], col=km$cluster, pch=16)
+Plot of gene expression for first two PCs with color representing tissues (left) and clusters found using all genes (right).
+
+By tabulating the results, we see that we obtain a similar answer to that obtained with hierarchical clustering.
+
+table(true=tissue,cluster=km$cluster)
+##              cluster
+## true           1  2  3  4  5  6  7
+##   cerebellum   0  0  5  0 31  2  0
+##   colon        0 34  0  0  0  0  0
+##   endometrium  0 15  0  0  0  0  0
+##   hippocampus  0  0 31  0  0  0  0
+##   kidney       0 37  0  0  0  2  0
+##   liver        2  0  0  0  0  0 24
+##   placenta     0  0  0  6  0  0  0
+
+Heatmaps
+Heatmaps are ubiquitous in the genomics literature. They are very useful plots for visualizing the measurements for a subset of rows over all the samples. A dendrogram is added on top and on the side that is created with hierarchical clustering. We will demonstrate how to create heatmaps from within R. Let’s begin by defining a color palette:
+
+library(RColorBrewer) 
+hmcol <- colorRampPalette(brewer.pal(9, "GnBu"))(100)
+Now, pick the genes with the top variance over all samples:
+
+library(genefilter)
+## Creating a generic function for 'nchar' from package 'base' in package 'S4Vectors'
+## 
+## Attaching package: 'genefilter'
+## 
+## The following object is masked from 'package:base':
+## 
+##     anyNA
+rv <- rowVars(e)
+idx <- order(-rv)[1:40]
+While a heatmap function is included in R, we recommend the heatmap.2 function from the gplots package on CRAN because it is a bit more customized. For example, it stretches to fill the window. Here we add colors to indicate the tissue on the top:
+
+library(gplots) ##Available from CRAN
+cols <- palette(brewer.pal(8, "Dark2"))[as.fumeric(tissue)]
+head(cbind(colnames(e),cols))
+##                        cols     
+## [1,] "GSM11805.CEL.gz" "#1B9E77"
+## [2,] "GSM11814.CEL.gz" "#1B9E77"
+## [3,] "GSM11823.CEL.gz" "#1B9E77"
+## [4,] "GSM11830.CEL.gz" "#1B9E77"
+## [5,] "GSM12067.CEL.gz" "#1B9E77"
+## [6,] "GSM12075.CEL.gz" "#1B9E77"
+heatmap.2(e[idx,], labCol=tissue,
+          trace="none", 
+          ColSideColors=cols, 
+          col=hmcol)
+Heatmap created using the 40 most variable genes and the function heatmap.2.
+
+We did not use tissue information to create this heatmap, and we can quickly see, with just 40 genes, good separation across tissues.
+
+Clustering and Heatmaps Exercise
+{pagebreak}
+
+Exercises
+Create a random matrix with no correlation in the following way:
+
+ set.seed(1)
+ m = 10000
+ n = 24
+ x = matrix(rnorm(m*n),m,n)
+ colnames(x)=1:n
+Run hierarchical clustering on this data with the hclust function with default parameters to cluster the columns. Create a dendrogram.
+
+In the dendrogram, which pairs of samples are the furthest away from each other?
+
+A) 7 and 23
+B) 19 and 14
+C) 1 and 16
+D) 17 and 18
+Set the seed at 1, set.seed(1) and replicate the creation of this matrix:
+
+ m = 10000
+ n = 24
+ x = matrix(rnorm(m*n),m,n)
+then perform hierarchical clustering as in the solution to exercise 1, and find the number of clusters if you use cuttree at height 143. This number is a random variable.
+
+Based on the Monte Carlo simulation, what is the standard error of this random variable?
+
+Run kmeans with 4 centers for the blood RNA data:
+
+ library(GSE5859Subset)
+ data(GSE5859Subset)
+Set the seed to 10, set.seed(10) right before running kmeans with 5 centers.
+
+Explore the relationship of clusters and information in sampleInfo. Which of the following best describes what you find?
+
+A) sampleInfo$group is driving the clusters as the 0s and 1s are in completely different clusters.
+B) The year is driving the clusters.
+C) Date is driving the clusters.
+D) The clusters don’t depend on any of the column of sampleInfo
+Load the data:
+
+ library(GSE5859Subset)
+ data(GSE5859Subset)
+Pick the 25 genes with the highest across sample variance. This function might help:
+
+ install.packages("matrixStats")
+ library(matrixStats)
+ ?rowMads ##we use mads due to a outlier sample
+Use heatmap.2 to make a heatmap showing the sampleInfo$group with color, the date as labels, the rows labelled with chromosome, and scaling the rows.
+
+What do we learn from this heatmap?
+
+A) The data appears as if it was generated by rnorm.
+B) Some genes in chr1 are very variable.
+C) A group of chrY genes are higher in group 0 and appear to drive the clustering. Within those clusters there appears to be clustering by month.
+D) A group of chrY genes are higher in October compared to June and appear to drive the clustering. Within those clusters there appears to be clustering by samplInfo$group.
+Create a large data set of random data that is completely independent of sampleInfo$group like this:
+
+ set.seed(17)
+ m = nrow(geneExpression)
+ n = ncol(geneExpression)
+ x = matrix(rnorm(m*n),m,n)
+ g = factor(sampleInfo$g )
+Create two heatmaps with these data. Show the group g either with labels or colors. First, take the 50 genes with smallest p-values obtained with rowttests. Then, take the 50 genes with largest standard deviations.
+
+Which of the following statements is true?
+
+A) There is no relationship between g and x, but with 8,793 tests some will appear significant by chance. Selecting genes with the t-test gives us a deceiving result.
+B) These two techniques produced similar heatmaps.
+C) Selecting genes with the t-test is a better technique since it permits us to detect the two groups. It appears to find hidden signals.
+D) The genes with the largest standard deviation add variability to the plot and do not let us find the differences between the two groups.
+
+Conditional probabilities and expectations
+Conditional Probabilities and Expectations
+Prediction problems can be divided into categorical and continuous outcomes. However, many of the algorithms can be applied to both due to the connection between conditional probabilities and conditional expectations.
+
+For categorical data, for example binary outcomes, if we know the probability of Y
+ being any of the possible outcomes k
+ given a set of predictors X=(X1,…,Xp)⊤
+,
+
+fk(x)=Pr(Y=k∣X=x)
+we can optimize our predictions. Specifically, for any x
+ we predict the k
+ that has the largest probability fk(x)
+.
+
+To simplify the exposition below, we will consider the case of binary data. You can think of the probability Pr(Y=1∣X=x)
+ as the proportion of 1s in the stratum of the population for which X=x
+. Given that the expectation is the average of all Y
+ values, in this case the expectation is equivalent to the probability: f(x)≡E(Y∣X=x)=Pr(Y=1∣X=x)
+. We therefore use only the expectation in the descriptions below as it is more general.
+
+In general, the expected value has an attractive mathematical property and it is that minimized the expected distance between the predictor Y^
+ and Y
+:
+
+E{(Y^−Y)2∣X=x}
+Regression in the context of prediction
+
+We use the son and father height example to illustrate how regression can be interpreted as a machine learning technique. In our example, we are trying to predict the son’s height Y
+ based on the father’s X
+. Here we have only one predictor. Now if we were asked to predict the height of a randomly selected son, we would go with the average height:
+
+library(rafalib)
+mypar(1,1)
+library(UsingR)
+data("father.son")
+x=round(father.son$fheight) ##round to nearest inch
+y=round(father.son$sheight)
+hist(y,breaks=seq(min(y),max(y)))
+abline(v=mean(y),col="red",lwd=2)
+Histogram of son heights.
+
+In this case, we can also approximate the distribution of Y
+ as normal, which implies the mean maximizes the probability density.
+
+Let’s imagine that we are given more information. We are told that the father of this randomly selected son has a height of 71 inches (1.25 SDs taller than the average). What is our prediction now?
+
+mypar(1,2)
+plot(x,y,xlab="Father's height in inches",ylab="Son's height in inches",main=paste("correlation =",signif(cor(x,y),2)))
+abline(v=c(-0.35,0.35)+71,col="red")
+hist(y[x==71],xlab="Heights",nc=8,main="",xlim=range(y))
+Son versus father height (left) with the red lines denoting the stratum defined by conditioning on fathers being 71 inches tall. Conditional distribution: son height distribution of stratum defined by 71 inch fathers.
+
+The best guess is still the expectation, but our strata has changed from all the data, to only the Y
+ with X=71
+. So we can stratify and take the average, which is the conditional expectation. Our prediction for any x
+ is therefore:
+
+f(x)=E(Y∣X=x)
+It turns out that because this data is approximated by a bivariate normal distribution, using calculus, we can show that:
+
+f(x)=μY+ρσYσX(X−μX)
+and if we estimate these five parameters from the sample, we get the regression line:
+
+mypar(1,2)
+plot(x,y,xlab="Father's height in inches",ylab="Son's height in inches",main=paste("correlation =",signif(cor(x,y),2)))
+abline(v=c(-0.35,0.35)+71,col="red")
+
+fit <- lm(y~x)
+abline(fit,col=1)
+
+hist(y[x==71],xlab="Heights",nc=8,main="",xlim=range(y))
+abline(v = fit$coef[1] + fit$coef[2]*71, col=1)
+Son versus father height showing predicted heights based on regression line (left). Conditional distribution with vertical line representing regression prediction.
+
+In this particular case, the regression line provides an optimal prediction function for Y
+. But this is not generally true because, in the typical machine learning problems, the optimal f(x)
+ is rarely a simple line.
+
+Conditional Expectations Exercises
+Exercises
+Throughout these exercises it will be useful to remember that when our data are 0s and 1s, probabilities and expectations are the same thing. We can do the math, but here is some R code:
+
+n = 1000
+y = rbinom(n,1,0.25)
+##proportion of ones Pr(Y)
+sum(y==1)/length(y)
+##expectaion of Y
+mean(y)
+Generate some random data to imitate heights for men (0) and women (1):
+
+ n = 10000
+ set.seed(1)
+ men = rnorm(n,176,7) #height in centimeters
+ women = rnorm(n,162,7) #height in centimeters
+ y = c(rep(0,n),rep(1,n))
+ x = round(c(men,women))
+ ##mix it up
+ ind = sample(seq(along=y))
+ y = y[ind]
+ x = x[ind]
+Using the data generated above, what is the $$E(Y	X=176)$?
+Now make a plot of $$E(Y	X=x)$$ for x=seq(160,178) using the data generated in exercise 1.
+If you are predicting female or male based on height and want your probability of success to be larger than 0.5, what is the largest height where you predict female ?
+
+Smoothing
+
+Smoothing
+Smoothing is a very powerful technique used all across data analysis. It is designed to estimate f(x)
+ when the shape is unknown, but assumed to be smooth. The general idea is to group data points that are expected to have similar expectations and compute the average, or fit a simple parametric model. We illustrate two smoothing techniques using a gene expression example.
+
+The following data are gene expression measurements from replicated RNA samples.
+
+##Following three packages are available from Bioconductor
+library(Biobase)
+library(SpikeIn)
+library(hgu95acdf)
+data(SpikeIn95)
+We consider the data used in an MA-plot comparing two replicated samples ( Y
+ = log ratios and X
+ = averages) and take down-sample in a way that balances the number of points for different strata of X
+ (code not shown):
+
+library(rafalib)
+mypar()
+plot(X,Y)
+MAplot comparing gene expression from two arrays.
+
+In the MA plot we see that Y
+ depends on X
+. This dependence must be a bias because these are based on replicates, which means Y
+ should be 0 on average regardless of X
+. We want to predict f(x)=E(Y∣X=x)
+ so that we can remove this bias. Linear regression does not capture the apparent curvature in f(x)
+:
+
+mypar()
+plot(X,Y)
+fit <- lm(Y~X)
+points(X,Y,pch=21,bg=ifelse(Y>fit$fitted,1,3))
+abline(fit,col=2,lwd=4,lty=2)
+MAplot comparing gene expression from two arrays with fitted regression line. The two colors represent positive and negative residuals.
+
+The points above the fitted line (green) and those below (purple) are not evenly distributed. We therefore need an alternative more flexible approach.
+
+Bin Smoothing
+Instead of fitting a line, let’s go back to the idea of stratifying and computing the mean. This is referred to as bin smoothing. The general idea is that the underlying curve is “smooth” enough so that, in small bins, the curve is approximately constant. If we assume the curve is constant, then all the Y
+ in that bin have the same expected value. For example, in the plot below, we highlight points in a bin centered at 8.6, as well as the points of a bin centered at 12.1, if we use bins of size 1. We also show the fitted mean values for the Y
+ in those bins with dashed lines (code not shown):
+
+MAplot comparing gene expression from two arrays with bin smoother fit shown for two points.
+
+By computing this mean for bins around every point, we form an estimate of the underlying curve f(x)
+. Below we show the procedure happening as we move from the smallest value of x
+ to the largest. We show 10 intermediate cases as well (code not shown):
+
+Illustration of how bin smoothing estimates a curve. howing in 12 steps of process.
+
+The final result looks like this (code not shown):
+
+MA-plot with curve obtained with bin smooth shown.
+
+There are several functions in R that implement bin smoothers. One example is ksmooth. However, in practice, we typically prefer methods that use slightly more complicated models than fitting a constant. The final result above, for example, is somewhat wiggly. Methods such as loess, which we explain next, improve on this.
+
+Loess
+Local weighted regression (loess) is similar to bin smoothing in principle. The main difference is that we approximate the local behavior with a line or a parabola. This permits us to expand the bin sizes, which stabilizes the estimates. Below we see lines fitted to two bins that are slightly larger than those we used for the bin smoother (code not shown). We can use larger bins because fitting lines provide slightly more flexibility.
+
+MAplot comparing gene expression from two arrays with bin local regression fit shown for two points.
+
+As we did for the bin smoother, we show 12 steps of the process that leads to a loess fit (code not shown):
+
+Illustration of how loess estimates a curves. Showing 12 steps of the process. 
+
+The final result is a smoother fit than the bin smoother since we use larger sample sizes to estimate our local parameters (code not shown):
+
+MA-plot with curve obtained with by loess shown.
+
+The function loess performs this analysis for us:
+
+fit <- loess(Y~X, degree=1, span=1/3)
+
+newx <- seq(min(X),max(X),len=100) 
+smooth <- predict(fit,newdata=data.frame(X=newx))
+
+mypar ()
+plot(X,Y,col="darkgrey",pch=16)
+lines(newx,smooth,col="black",lwd=3)
+Loess fitted with the loess function.
+
+There are three other important differences between loess and the typical bin smoother. The first is that rather than keeping the bin size the same, loess keeps the number of points used in the local fit the same. This number is controlled via the span argument which expects a proportion. For example, if N is the number of data points and span=0.5, then for a given x
+ , loess will use the 0.5*N closest points to x
+ for the fit. The second difference is that, when fitting the parametric model to obtain f(x)
+, loess uses weighted least squares, with higher weights for points that are closer to x
+. The third difference is that loess has the option of fitting the local model robustly. An iterative algorithm is implemented in which, after fitting a model in one iteration, outliers are detected and downweighted for the next iteration. To use this option, we use the argument family="symmetric".
+
+Smoothing exercises
+Exercises
+Generate the following data:
+
+ n = 10000
+ set.seed(1)
+ men = rnorm(n,176,7) #height in centimeters
+ women = rnorm(n,162,7) #height in centimeters
+ y = c(rep(0,n),rep(1,n))
+ x = round(c(men,women))
+ ##mix it up
+ ind = sample(seq(along=y))
+ y = y[ind]
+ x = x[ind]
+Set the seed at 5, set.seed(5) and take a random sample of 250 from:
+
+ set.seed(5)
+ N = 250
+ ind = sample(length(y),N)
+ Y = y[ind]
+ X = x[ind]
+Use loess to estimate $$f(x)=E(Y	X=x)usingthedefaultparameters.Whatisthepredicted
+f(168)$?
+The loess estimate above is a random variable. We can compute standard errors for it. Here we use Monte Carlo to demonstrate that it is a random variable. Use Monte Carlo simulation to estimate the standard error of your estimate of f(168)
+.
+
+Set the seed to 5, set.seed(5) and perform 10000 simulations and report the SE of the loess based estimate.
+
+plot in this chapter, we created a test and a training set. We plot them here:
+
+#x, test, cols, and coltest were created in code that was not shown
+#x is training x1 and x2, test is test x1 and x2
+#cols (0=blue, 1=red) are training observations
+#coltests are test observations
+mypar(1,2)
+plot(x,pch=21,bg=cols,xlab="X1",ylab="X2",xlim=XLIM,ylim=YLIM)
+plot(test,pch=21,bg=colstest,xlab="X1",ylab="X2",xlim=XLIM,ylim=YLIM)
+Training data (left) and test data (right)
+
+You will notice that the test and train set have similar global properties since they were generated by the same random variables (more blue towards the bottom right), but are, by construction, different. The reason we create test and training sets is to detect over-training by testing on a different data than the one used to fit models or train algorithms. We will see how important this is below.
+
+Predicting with regression
+A first naive approach to this ML problem is to fit a two variable linear regression model:
+
+##x and y were created in the code (not shown) for the first plot
+#y is outcome for the training set
+X1 <- x[,1] ##these are the covariates
+X2 <- x[,2] 
+fit1 <- lm(y~X1+X2)
+Once we the have fitted values, we can estimate f(x1,x2)
+ with f^(x1,x2)=β^0+β^1x1+β^2x2
+. To provide an actual prediction, we simply predict 1 when f^(x1,x2)>0.5
+. We now examine the error rates in the test and training sets and also plot the boundary region:
+
+##prediction on train
+yhat <- predict(fit1)
+yhat <- as.numeric(yhat>0.5)
+cat("Linear regression prediction error in train:",1-mean(yhat==y),"\n")
+## Linear regression prediction error in train: 0.295
+We can quickly obtain predicted values for any set of values using the predict function:
+
+yhat <- predict(fit1,newdata=data.frame(X1=newx[,1],X2=newx[,2]))
+Now we can create a plot showing where we predict 1s and where we predict 0s, as well as the boundary. We can also use the predict function to obtain predicted values for our test set. Note that nowhere do we fit the model on the test set:
+
+colshat <- yhat
+colshat[yhat>=0.5] <- mycols[2]
+colshat[yhat<0.5] <- mycols[1]
+m <- -fit1$coef[2]/fit1$coef[3] #boundary slope
+b <- (0.5 - fit1$coef[1])/fit1$coef[3] #boundary intercept
+
+##prediction on test
+yhat <- predict(fit1,newdata=data.frame(X1=test[,1],X2=test[,2]))
+yhat <- as.numeric(yhat>0.5)
+cat("Linear regression prediction error in test:",1-mean(yhat==ytest),"\n")
+## Linear regression prediction error in test: 0.3075
+plot(test,type="n",xlab="X1",ylab="X2",xlim=XLIM,ylim=YLIM)
+abline(b,m)
+points(newx,col=colshat,pch=16,cex=0.35)
+
+##test was created in the code (not shown) for the first plot
+points(test,bg=cols,pch=21)
+We estimate the probability of 1 with a linear regression model with X1 and X2 as predictors. The resulting prediction map is divided into parts that are larger than 0.5 (red) and lower than 0.5 (blue).
+
+The error rates in the test and train sets are quite similar. Thus, we do not seem to be over-training. This is not surprising as we are fitting a 2 parameter model to 400 data points. However, note that the boundary is a line. Because we are fitting a plane to the data, there is no other option here. The linear regression method is too rigid. The rigidity makes it stable and avoids over training, but it also keeps the model from adapting to the non-linear relationship between Y
+ and X
+. We saw this before in the smoothing section. The next ML technique we consider is similar to the smoothing techniques described before.
+
+
+K-nearest neighbor
+K-nearest neighbors (kNN) is similar to bin smoothing, but it is easier to adapt to multiple dimensions. Basically, for any point x
+ for which we want an estimate, we look for the k nearest points and then take an average of these points. This gives us an estimate of f(x1,x2)
+, just like the bin smoother gave us an estimate of a curve. We can now control flexibility through k
+. Here we compare k=1
+ and k=100
+.
+
+library(class)
+mypar(2,2)
+for(k in c(1,100)){
+  ##predict on train
+  yhat <- knn(x,x,y,k=k)
+  cat("KNN prediction error in train:",1-mean((as.numeric(yhat)-1)==y),"\n")
+  ##make plot
+  yhat <- knn(x,test,y,k=k)
+  cat("KNN prediction error in test:",1-mean((as.numeric(yhat)-1)==ytest),"\n")
+}
+## KNN prediction error in train: 0 
+## KNN prediction error in test: 0.375 
+## KNN prediction error in train: 0.2425 
+## KNN prediction error in test: 0.2825
+To visualize why we make no errors in the train set and many errors in the test set when k=1
+ and obtain more stable results from k=100
+, we show the prediction regions (code not shown): Prediction regions obtained with kNN for k=1 (top) and k=200 (bottom). We show both train (left) and test data (right).
+
+When k=1
+, we make no mistakes in the training test since every point is its closest neighbor and it is equal to itself. However, we see some islands of blue in the red area that, once we move to the test set, are more error prone. In the case k=100
+, we do not have this problem and we also see that we improve the error rate over linear regression. We can also see that our estimate of f(x1,x2)
+ is closer to the truth.
+
+Bayes rule
+Here we include a comparison of the test and train set errors for various values of k
+. We also include the error rate that we would make if we actually knew E(Y∣X1=x1,X2=x2)
+ referred to as Bayes Rule.
+
+We start by computing the error rates…
+
+###Bayes Rule
+yhat <- apply(test,1,p)
+cat("Bayes rule prediction error in train",1-mean(round(yhat)==y),"\n")
+## Bayes rule prediction error in train 0.2775
+bayes.error=1-mean(round(yhat)==y)
+train.error <- rep(0,16)
+test.error <- rep(0,16)
+for(k in seq(along=train.error)){
+  ##predict on train
+  yhat <- knn(x,x,y,k=2^(k/2))
+  train.error[k] <- 1-mean((as.numeric(yhat)-1)==y)
+  ##prediction on test    
+  yhat <- knn(x,test,y,k=2^(k/2))
+  test.error[k] <- 1-mean((as.numeric(yhat)-1)==y)
+}
+… and then plot the error rates against values of k
+. We also show the Bayes rules error rate as a horizontal line.
+
+ks <- 2^(seq(along=train.error)/2)
+mypar()
+plot(ks,train.error,type="n",xlab="K",ylab="Prediction Error",log="x",ylim=range(c(test.error,train.error)))
+lines(ks,train.error,type="b",col=4,lty=2,lwd=2)
+lines(ks,test.error,type="b",col=5,lty=3,lwd=2)
+abline(h=bayes.error,col=6)
+legend("bottomright",c("Train","Test","Bayes"),col=c(4,5,6),lty=c(2,3,1),box.lwd=0)
+Prediction error in train (pink) and test (green) versus number of neighbors. The yellow line represents what one obtains with Bayes Rule.
+
+Note that these error rates are random variables and have standard errors. In the next section we describe cross-validation which helps reduce some of this variability. However, even with this variability, the plot clearly shows the problem over over-fitting when using values lower than 20 and under-fitting with values above 100.
+
+Cross-validation
+Cross-validation
+Here we describe cross-validation: one of the fundamental methods in machine learning for method assessment and picking parameters in a prediction or machine learning task. Suppose we have a set of observations with many features and each observation is associated with a label. We will call this set our training data. Our task is to predict the label of any new samples by learning patterns from the training data. For a concrete example, let’s consider gene expression values, where each gene acts as a feature. We will be given a new set of unlabeled data (the test data) with the task of predicting the tissue type of the new samples.
+
+If we choose a machine learning algorithm with a tunable parameter, we have to come up with a strategy for picking an optimal value for this parameter. We could try some values, and then just choose the one which performs the best on our training data, in terms of the number of errors the algorithm would make if we apply it to the samples we have been given for training. However, we have seen how this leads to over-fitting.
+
+Let’s start by loading the tissue gene expression dataset:
+
+library(tissuesGeneExpression)
+data(tissuesGeneExpression)
+For illustration purposes, we will drop one of the tissues which doesn’t have many samples:
+
+table(tissue)
+## tissue
+##  cerebellum       colon endometrium hippocampus      kidney       liver 
+##          38          34          15          31          39          26 
+##    placenta 
+##           6
+ind <- which(tissue != "placenta")
+y <- tissue[ind]
+X <- t( e[,ind] )
+This tissue will not form part of our example.
+
+Now let’s try out k-nearest neighbors for classification, using k=5
+. What is our average error in predicting the tissue in the training set, when we’ve used the same data for training and for testing?
+
+library(class)
+pred <- knn(train =  X, test = X, cl=y, k=5)
+mean(y != pred)
+## [1] 0
+We have no errors in prediction in the training set with k=5
+. What if we use k=1
+?
+
+pred <- knn(train=X, test=X, cl=y, k=1)
+mean(y != pred)
+## [1] 0
+Trying to classify the same observations as we use to train the model can be very misleading. In fact, for k-nearest neighbors, using k=1 will always give 0 classification error in the training set, because we use the single observation to classify itself. The reliable way to get a sense of the performance of an algorithm is to make it give a prediction for a sample it has never seen. Similarly, if we want to know what the best value for a tunable parameter is, we need to see how different values of the parameter perform on samples, which are not in the training data.
+
+Cross-validation is a widely-used method in machine learning, which solves this training and test data problem, while still using all the data for testing the predictive accuracy. It accomplishes this by splitting the data into a number of folds. If we have N
+ folds, then the first step of the algorithm is to train the algorithm using (N−1)
+ of the folds, and test the algorithm’s accuracy on the single left-out fold. This is then repeated N times until each fold has been used as in the test set. If we have M
+ parameter settings to try out, then this is accomplished in an outer loop, so we have to fit the algorithm a total of N×M
+ times.
+
+We will use the createFolds function from the caret package to make 5 folds of our gene expression data, which are balanced over the tissues. Don’t be confused by the fact that the createFolds function uses the same letter ‘k’ as the ‘k’ in k-nearest neighbors. These ‘k’ are totally unrelated. The caret function createFolds is asking for how many folds to create, the N
+ from above. The ‘k’ in the knn function is for how many closest observations to use in classifying a new sample. Here we will create 10 folds:
+
+library(caret)
+set.seed(1)
+idx <- createFolds(y, k=10)
+sapply(idx, length)
+## Fold01 Fold02 Fold03 Fold04 Fold05 Fold06 Fold07 Fold08 Fold09 Fold10 
+##     18     19     17     17     18     20     19     19     20     16
+The folds are returned as a list of numeric indices. The first fold of data is therefore:
+
+y[idx[[1]]] ##the labels
+##  [1] "kidney"      "kidney"      "hippocampus" "hippocampus" "hippocampus"
+##  [6] "cerebellum"  "cerebellum"  "cerebellum"  "colon"       "colon"      
+## [11] "colon"       "colon"       "kidney"      "kidney"      "endometrium"
+## [16] "endometrium" "liver"       "liver"
+head( X[idx[[1]], 1:3] ) ##the genes (only showing the first 3 genes...)
+##                 1007_s_at  1053_at   117_at
+## GSM12075.CEL.gz  9.966782 6.060069 7.644452
+## GSM12098.CEL.gz  9.945652 5.927861 7.847192
+## GSM21214.cel.gz 10.955428 5.776781 7.493743
+## GSM21218.cel.gz 10.757734 5.984170 8.525524
+## GSM21230.cel.gz 11.496114 5.760156 7.787561
+## GSM87086.cel.gz  9.798633 5.862426 7.279199
+We can see that, in fact, the tissues are fairly equally represented across the 10 folds:
+
+sapply(idx, function(i) table(y[i]))
+##             Fold01 Fold02 Fold03 Fold04 Fold05 Fold06 Fold07 Fold08 Fold09
+## cerebellum       3      4      4      4      4      4      4      4      4
+## colon            4      3      3      3      4      4      3      3      4
+## endometrium      2      2      1      1      1      2      1      2      2
+## hippocampus      3      3      3      3      3      3      4      3      3
+## kidney           4      4      3      4      4      4      4      4      4
+## liver            2      3      3      2      2      3      3      3      3
+##             Fold10
+## cerebellum       3
+## colon            3
+## endometrium      1
+## hippocampus      3
+## kidney           4
+## liver            2
+Because tissues have very different gene expression profiles, predicting tissue with all genes will be very easy. For illustration purposes we will try to predict tissue type with just two dimensional data. We will reduce the dimension of our data using cmdscale:
+
+library(rafalib)
+mypar()
+Xsmall <- cmdscale(dist(X))
+plot(Xsmall,col=as.fumeric(y))
+legend("topleft",levels(factor(y)),fill=seq_along(levels(factor(y))))
+First two PCs of the tissue gene expression data with color representing tissue. We use these two PCs as our two predictors throughout.
+
+Now we can try out the k-nearest neighbors method on a single fold. We provide the knn function with all the samples in Xsmall except those which are in the first fold. We remove these samples using the code -idx[[1]] inside the square brackets. We then use those samples in the test set. The cl argument is for the true classifications or labels (here, tissue) of the training data. We use 5 observations to classify in our k-nearest neighbor algorithm:
+
+pred <- knn(train=Xsmall[ -idx[[1]] , ], test=Xsmall[ idx[[1]], ], cl=y[ -idx[[1]] ], k=5)
+table(true=y[ idx[[1]] ], pred)
+##              pred
+## true          cerebellum colon endometrium hippocampus kidney liver
+##   cerebellum           2     0           0           1      0     0
+##   colon                0     4           0           0      0     0
+##   endometrium          0     0           1           0      1     0
+##   hippocampus          1     0           0           2      0     0
+##   kidney               0     0           0           0      4     0
+##   liver                0     0           0           0      0     2
+mean(y[ idx[[1]] ] != pred)
+## [1] 0.1666667
+Now we have some misclassifications. How well do we do for the rest of the folds?
+
+for (i in 1:10) {
+  pred <- knn(train=Xsmall[ -idx[[i]] , ], test=Xsmall[ idx[[i]], ], cl=y[ -idx[[i]] ], k=5)
+  print(paste0(i,") error rate: ", round(mean(y[ idx[[i]] ] != pred),3)))
+}
+## [1] "1) error rate: 0.167"
+## [1] "2) error rate: 0.105"
+## [1] "3) error rate: 0.118"
+## [1] "4) error rate: 0.118"
+## [1] "5) error rate: 0.278"
+## [1] "6) error rate: 0.05"
+## [1] "7) error rate: 0.105"
+## [1] "8) error rate: 0.211"
+## [1] "9) error rate: 0.15"
+## [1] "10) error rate: 0.312"
+So we can see there is some variation for each fold, with errors rates hovering around 0.1-0.3. But is k=5 the best setting for the k parameter? In order to explore the best setting for k, we need to create an outer loop, where we try different values for k, and then calculate the average test set error across all the folds.
+
+We will try out each value of k from 1 to 12. Instead of using two for loops, we will use sapply:
+
+set.seed(1)
+ks <- 1:12
+res <- sapply(ks, function(k) {
+  ##try out each version of k from 1 to 12
+  res.k <- sapply(seq_along(idx), function(i) {
+    ##loop over each of the 10 cross-validation folds
+    ##predict the held-out samples using k nearest neighbors
+    pred <- knn(train=Xsmall[ -idx[[i]], ],
+                test=Xsmall[ idx[[i]], ],
+                cl=y[ -idx[[i]] ], k = k)
+    ##the ratio of misclassified samples
+    mean(y[ idx[[i]] ] != pred)
+  })
+  ##average over the 10 folds
+  mean(res.k)
+})
+Now for each value of k, we have an associated test set error rate from the cross-validation procedure.
+
+res
+##  [1] 0.1978212 0.1703423 0.1882933 0.1750989 0.1613291 0.1500791 0.1552670
+##  [8] 0.1884813 0.1822020 0.1763197 0.1761318 0.1813197
+We can then plot the error rate for each value of k, which helps us to see in what region there might be a minimal error rate:
+
+plot(ks, res, type="o",ylab="misclassification error")
+Misclassification error versus number of neighbors.
+
+Remember, because the training set is a random sample and because our fold-generation procedure involves random number generation, the “best” value of k we pick through this procedure is also a random variable. If we had new training data and if we recreated our folds, we might get a different value for the optimal k.
+
+Finally, to show that gene expression can perfectly predict tissue, we use 5 dimensions instead of 2, which results in perfect prediction:
+
+Xsmall <- cmdscale(dist(X),k=5)
+set.seed(1)
+ks <- 1:12
+res <- sapply(ks, function(k) {
+  res.k <- sapply(seq_along(idx), function(i) {
+    pred <- knn(train=Xsmall[ -idx[[i]], ],
+                test=Xsmall[ idx[[i]], ],
+                cl=y[ -idx[[i]] ], k = k)
+    mean(y[ idx[[i]] ] != pred)
+  })
+  mean(res.k)
+})
+plot(ks, res, type="o",ylim=c(0,0.20),ylab="misclassification error")
+Misclassification error versus number of neighbors when we use five dimensions instead of 2.
+
+Important note: we applied cmdscale to the entire dataset to create a smaller one for illustration purposes. However, in a real machine learning application, this may result in an underestimation of test set error for small sample sizes, where dimension reduction using the unlabeled full dataset gives a boost in performance. A safer choice would have been to transform the data separately for each fold, by calculating a rotation and dimension reduction using the training set only and applying this to the test set.
+
+Cross-validation Exercises
+Exercises
+Load the following dataset:
+
+library(GSE5859Subset)
+data(GSE5859Subset)
+And define the outcome and predictors. To make the problem more difficult, we will only consider autosomal genes:
+
+y = factor(sampleInfo$group)
+X = t(geneExpression)
+out = which(geneAnnotation$CHR%in%c("chrX","chrY"))
+X = X[,-out]
+Use the createFold function in the caret package, set the seed to 1 set.seed(1) and create 10 folds.
+
+Question: What is the 2nd entry in the fold 3?
+
+We are going to use kNN. We are going to consider a smaller set of predictors by using filtering genes using t-tests. Specifically, we will perform a t-test and select the m
+ genes with the smallest p-values.
+
+Let m=8
+ and k=5
+ and train kNN by leaving out the second fold idx[[2]]. How many mistakes do we make on the test set? Remember it is indispensable that you perform the t-test on the training data.
+
+Now run through all 5 folds. What is our error rate?
+
+Now we are going to select the best values of k
+ and m
+. Use the expand grid function to try out the following values:
+
+ ms=2^c(1:11)
+ ks=seq(1,9,2)
+ params = expand.grid(k=ks,m=ms)
+Now use apply or a for-loop to obtain error rates for each of these pairs of parameters. Which pair of parameters minimizes the error rate?
+
+Repeat exercise 4, but now perform the t-test filtering before the cross validation. Note how this biases the entire result and gives us much lower estimated error rates.
+
+Repeat exercise 3, but now, instead of sampleInfo$group , use
+
+ y = factor(as.numeric(format( sampleInfo$date, "%m")=="06"))
+What is the minimum error rate now?
+
+We achieve much lower error rates when predicting date than when predicting the group. Because group is confounded with date, it is very possible that these predictors have no information about group and that our lower 0.5 error rates are due to the confounding with date. We will learn more about this in the batch effect chapter.
+
+Batch Effects
+Batch Effects
+One often overlooked complication with high-throughput studies is batch effects, which occur because measurements are affected by laboratory conditions, reagent lots, and personnel differences. This becomes a major problem when batch effects are confounded with an outcome of interest and lead to incorrect conclusions. In this chapter, we describe batch effects in detail: how to detect, interpret, model, and adjust for batch effects.
+
+Batch effects are the biggest challenge faced by genomics research, especially in the context of precision medicine. The presence of batch effects in one form or another have been reported among most, if not all, high-throughput technologies [Leek et al. (2010) Nature Reviews Genetics 11, 733-739]. But batch effects are not specific to genomics technology. In fact, in a 1972 paper, WJ Youden describes batch effects in the context of empirical estimates of physical constants. He pointed out the “subjective character of present estimates” of physical constants and how estimates changed from laboratory to laboratory. For example, in Table 1, Youden shows the following estimates of the astronomical unit from different laboratories. The reports included an estimate of spread (what we now would call a confidence interval).
+
+Estimates of the astronomical unit with estimates of spread, versus year it was reported. The two laboratories that reported more than one estimate are shown in color.
+
+Judging by the variability across labs and the fact that the reported bounds do not explain this variability, clearly shows the presence of an effect that differs across labs, but not within. This type of variability is what we call a batch effect. Note that there are laboratories that reported two estimates (purple and orange) and batch effects are seen across the two different measurements from the same laboratories as well.
+
+We can use statistical notation to precisely describe the problem. The scientists making these measurements assumed they observed:
+
+Yi,j=μ+εi,j,j=1,…,N
+with Yi,j
+ the j
+-th measurement of laboratory i
+, μ
+ the true physical constant, and εi,j
+ independent measurement error. To account for the variability introduced by εi,j
+, we compute standard errors from the data. As we saw earlier in the book, we estimate the physical constant with the average of the N
+ measurements…
+
+Y¯i=1N∑i=1NYi,j
+.. and we can construct a confidence interval by:
+
+Y¯i±2si/N−−√ with s2i=1N−1∑i=1N(Yi,j−Y¯i)2
+However, this confidence interval will be too small because it does not catch the batch effect variability. A more appropriate model is:
+
+Yi,j=μ+γi+εi,j,j=1,…,N
+with γi
+ a laboratory specific bias or batch effect.
+
+From the plot it is quite clear that the variability of γ
+ across laboratories is larger than the variability of ε
+ within a lab. The problem here is that there is no information about γ
+ in the data from a single lab. The statistical term for the problem is that μ
+ and γ
+ are unidentifiable. We can estimate the sum μi+γi
+ , but we can’t distinguish one from the other.
+
+We can also view γ
+ as a random variable. In this case, each laboratory has an error term γi
+ that is the same across measurements from that lab, but different from lab to lab. Under this interpretation the problem is that:
+
+si/N−−√ with s2i=1N−1∑i=1N(Yij−Y¯i)2
+is an underestimate of the standard error since it does not account for the within lab correlation induced by γ
+.
+
+With data from several laboratories we can in fact estimate the γ
+, if we assume they average out to 0. Or we can consider them to be random effects and simply estimate a new estimate and standard error with all measurements. Here is a confidence interval treating each reported average as a random observation:
+
+avg <- mean(dat[,3])
+se <- sd(dat[,3]) / sqrt(nrow(dat))
+## 95% confidence interaval is: [ 92.8727 , 92.98542 ]
+## which does include the current estimate is: 92.95604
+Youden’s paper also includes batch effect examples from more recent estimates of the speed of light, as well as estimates of the gravity constant. Here we demonstrate the widespread presence and complex nature of batch effects in high-throughput biological measurements.
+
+PH525x, Rafael Irizarry and Michael Love, MIT License
+
+Confounding
+Confounding
+Batch effects have the most devastating effects when they are counfounded with outcomes of interest. Here we described confounding and how it relates to data interpretation.
+
+“Correlation is not causation” is one of the most important lessons you should take from this or any other data analysis course. A common example for why this statement is so often true is confounding. Simply stated confounding occurs when we observe a correlation or association between X
+ and Y
+, but this is strictly the result of both X
+ and Y
+ depending on an extraneous variable Z
+. Here we describe Simpson’s paradox, an example based on a famous legal case, and an example of confounding in high-throughput biology.
+
+Example of Simpson’s Paradox
+Admission data from U.C. Berkeley 1973 showed that more men were being admitted than women: 44% men were admitted compared to 30% women. This actually led to a lawsuit. See: PJ Bickel, EA Hammel, and JW O’Connell. Science (1975). Here is the data:
+
+library(dagdata)
+data(admissions)
+admissions$total=admissions$Percent*admissions$Number/100
+
+##percent men get in
+sum(admissions$total[admissions$Gender==1]/sum(admissions$Number[admissions$Gender==1]))
+## [1] 0.4451951
+##percent women get in
+sum(admissions$total[admissions$Gender==0]/sum(admissions$Number[admissions$Gender==0]))
+## [1] 0.3033351
+A chi-square test clearly rejects the hypothesis that gender and admission are independent:
+
+##make a 2 x 2 table
+index = admissions$Gender==1
+men = admissions[index,]
+women = admissions[!index,]
+menYes = sum(men$Number*men$Percent/100)
+menNo = sum(men$Number*(1-men$Percent/100))
+womenYes = sum(women$Number*women$Percent/100)
+womenNo = sum(women$Number*(1-women$Percent/100))
+tab = matrix(c(menYes,womenYes,menNo,womenNo),2,2)
+print(chisq.test(tab)$p.val)
+## [1] 9.139492e-22
+But closer inspection shows a paradoxical result. Here are the percent admissions by major:
+
+y=cbind(admissions[1:6,c(1,3)],admissions[7:12,3])
+colnames(y)[2:3]=c("Male","Female")
+y
+##   Major Male Female
+## 1     A   62     82
+## 2     B   63     68
+## 3     C   37     34
+## 4     D   33     35
+## 5     E   28     24
+## 6     F    6      7
+Notice that we no longer see a clear gender bias. The chi-square test we performed above suggests a dependence between admission and gender. Yet when the data is grouped by major, this dependence seems to disappear. What’s going on?
+
+This is an example of Simpson’s paradox . A plot showing the percentages that applied to a major against the percent that get into that major, for males and females starts to point to an explanation.
+
+y=cbind(admissions[1:6,5],admissions[7:12,5])
+y=sweep(y,2,colSums(y),"/")*100
+x=rowMeans(cbind(admissions[1:6,3],admissions[7:12,3]))
+
+library(rafalib)
+mypar()
+matplot(x,y,xlab="percent that gets in the major",ylab="percent that applies to major",col=c("blue","red"),cex=1.5)
+legend("topleft",c("Male","Female"),col=c("blue","red"),pch=c("1","2"),box.lty=0)
+Percent of students that applied versus percent that were admitted by gender.
+
+What the plot suggests is that males were much more likely to apply to “easy” majors. The plot shows that males and “easy” majors are confounded.
+
+Confounding explained graphically
+Here we visualize the confounding. In the plots below, each letter represents a person. Accepted individuals are denoted in green and not admitted in orange. The letter indicates the major. In this first plot we group all the students together and notice that the proportion of green is larger for men.
+
+Admitted are in green and majors are denoted with letters. Here we clearly see that more males were admitted.
+
+Now we stratify the data by major. The key point here is that most of the accepted men (green) come from the easy majors: A and B.
+
+Simpon's Paradox illustrated. Admitted students are in green. Students are now stratified by the major to which they applied.
+
+Average after stratifying
+In this plot, we can see that if we condition or stratify by major, and then look at differences, we control for the confounder and this effect goes away.
+
+y=cbind(admissions[1:6,3],admissions[7:12,3])
+matplot(1:6,y,xaxt="n",xlab="major",ylab="percent",col=c("blue","red"),cex=1.5)
+axis(1,1:6,LETTERS[1:6])
+legend("topright",c("Male","Female"),col=c("blue","red"),pch=c("1","2"),
+       box.lty=0)
+Admission percentage by major for each gender.
+
+The average difference by major is actually 3.5% higher for women.
+
+mean(y[,1]-y[,2])
+## [1] -3.5
+Simpson’s paradox in baseball
+Simpson’s Paradox is commonly seen in baseball statistics. Here is a well known example in which David Justice had a higher batting average than Derek Jeter in both 1995 and 1996, but Jeter had a higher overall average:
+
+ 	1995	1996	Combined
+Derek Jeter	12/48 (.250)	183/582 (.314)	195/630 (.310)
+David Justice	104/411 (.253)	45/140 (.321)	149/551 (.270)
+The confounder here is games played. Jeter played more games during the year he batted better, while the opposite is true for Justice.
+
+
+Confounding: High-throughput Example
+To describe the problem of confounding with a real example, we will use a dataset from this paper that claimed that roughly 50% of genes where differentially expressed when comparing blood from two ethnic groups. We include the data in one of our data packages:
+
+library(Biobase) ##available from Bioconductor
+library(genefilter) 
+library(GSE5859) ##available from github
+data(GSE5859)
+We can extract the gene expression data and sample information table using the Bioconductor functions exprs and pData like this:
+
+geneExpression = exprs(e)
+sampleInfo = pData(e)
+Note that some samples were processed at different times.
+
+head(sampleInfo$date)
+## [1] "2003-02-04" "2003-02-04" "2002-12-17" "2003-01-30" "2003-01-03"
+## [6] "2003-01-16"
+This is an extraneous variable and should not affect the values in geneExpression. However, as we have seen in previous analyses, it does appear to have an effect. We will therefore explore this here.
+
+We can immediately see that year and ethnicity are almost completely confounded:
+
+year = factor( format(sampleInfo$date,"%y") )
+tab = table(year,sampleInfo$ethnicity)
+print(tab)
+##     
+## year ASN CEU HAN
+##   02   0  32   0
+##   03   0  54   0
+##   04   0  13   0
+##   05  80   3   0
+##   06   2   0  24
+By running a t-test and creating a volcano plot, we note that thousands of genes appear to be differentially expressed between ethnicities. Yet when we perform a similar comparison only on the CEU population between the years 2002 and 2003, we again obtain thousands of differentially expressed genes:
+
+library(genefilter)
+
+##remove control genes
+out <- grep("AFFX",rownames(geneExpression))
+
+eth <- sampleInfo$ethnicity
+ind<- which(eth%in%c("CEU","ASN"))
+res1 <- rowttests(geneExpression[-out,ind],droplevels(eth[ind]))
+ind <- which(year%in%c("02","03") & eth=="CEU")
+res2 <- rowttests(geneExpression[-out,ind],droplevels(year[ind]))
+
+XLIM <- max(abs(c(res1$dm,res2$dm)))*c(-1,1)
+YLIM <- range(-log10(c(res1$p,res2$p)))
+mypar(1,2)
+plot(res1$dm,-log10(res1$p),xlim=XLIM,ylim=YLIM,
+     xlab="Effect size",ylab="-log10(p-value)",main="Populations")
+plot(res2$dm,-log10(res2$p),xlim=XLIM,ylim=YLIM,
+     xlab="Effect size",ylab="-log10(p-value)",main="2003 v 2002")
+Volcano plots for gene expression data. Comparison by ethnicity (left) and by year within one ethnicity (right).
+
+Confounding Exercises
+Exercises
+Load the admissions data from the dagdata package (which is available from the genomicsclass repository):
+
+library(dagdata) 
+data(admissions)
+Familiarize yourself with this table:
+
+admissions
+Let’s compute the proportion of men who were accepted:
+
+ index = which(admissions$Gender==1)
+ accepted= sum(admissions$Number[index] * admissions$Percent[index]/100)
+ applied = sum(admissions$Number[index])
+ accepted/applied
+What is the proportion of women that were accepted?
+
+Now that we have observed different acceptance rates between genders, test for the significance of this result.
+
+If you perform an independence test, what is the p-value?
+
+This difference actually led to a lawsuit.
+
+Now notice that looking at the data by major, the differences disappear.
+
+ admissions
+How can this be? This is referred to as Simpson’s Paradox. In the following questions we will try to decipher why this is happening.
+
+We can quantify how “hard” a major is by using the percent of students that were accepted. Compute the percent that were accepted (regardless of gender) to each major and call this vector H.
+
+Which is the hardest major?
+
+What proportion is accepted for this major?
+
+For men, what is the correlation between the number of applications across majors and H?
+
+For women, what is the correlation between the number of applications across majors and H?
+
+Given the answers to the above, which best explains the differences in admission percentages when we combine majors?
+
+A) We made a coding mistake when computing the overall admissions percentages.
+B) There were more total number of women applications which made the denominator much bigger.
+C) There is confounding between gender and preference for “hard” majors: females are more likely to apply to harder majors.
+D) The sample size for the individual majors was not large enough to draw the correct conclusion.
+
+Discovering Batch Effects with EDA
+Discovering Batch Effects with EDA
+Now that we understand PCA, we are going to demonstrate how we use it in practice with an emphasis on exploratory data analysis. To illustrate, we will go through an actual dataset that has not been sanitized for teaching purposes. We start with the raw data as it was provided in the public repository. The only step we did for you is to preprocess these data and create an R package with a preformed Bioconductor object.
+
+Gene Expression Data
+Start by loading the data:
+
+library(rafalib)
+library(Biobase)
+library(GSE5859) ##Available from GitHub
+data(GSE5859)
+We start by exploring the sample correlation matrix and noting that one pair has a correlation of 1. This must mean that the same sample was uploaded twice to the public repository, but given different names. The following code identifies this sample and removes it.
+
+cors <- cor(exprs(e))
+Pairs=which(abs(cors)>0.9999,arr.ind=TRUE)
+out = Pairs[which(Pairs[,1]<Pairs[,2]),,drop=FALSE]
+if(length(out[,2])>0) e=e[,-out[2]]
+We also remove control probes from the analysis:
+
+out <- grep("AFFX",featureNames(e))
+e <- e[-out,]
+Now we are ready to proceed. We will create a detrended gene expression data matrix and extract the dates and outcome of interest from the sample annotation table.
+
+y <- exprs(e)-rowMeans(exprs(e))
+dates <- pData(e)$date
+eth <- pData(e)$ethnicity
+The original dataset did not include sex in the sample information. We did this for you in the subset dataset we provided for illustrative purposes. In the code below, we show how we predict the sex of each sample. The basic idea is to look at the median gene expression levels on Y chromosome genes. Males should have much higher values. To do this, we need to upload an annotation package that provides information for the features of the platform used in this experiment:
+
+annotation(e)
+## [1] "hgfocus"
+We need to download and install the hgfocus.db package and then extract the chromosome location information.
+
+library(hgfocus.db) ##install from Bioconductor
+## Warning: package 'S4Vectors' was built under R version 3.2.2
+annot <- select(hgfocus.db, keys=featureNames(e), keytype="PROBEID",
+                columns=c("CHR"))
+##for genes with multiples, pick one
+annot <-annot[match(featureNames(e),annot$PROBEID),]
+annot$CHR <- ifelse(is.na(annot$CHR),NA,paste0("chr",annot$CHR))
+##compute median expression on chromosome Y
+chryexp<- colMeans(y[which(annot$CHR=="chrY"),])
+If we create a histogram of the median gene expression values on chromosome Y, we clearly see two modes which must be females and males:
+
+mypar()
+hist(chryexp)
+Histogram of median expresion y-axis. We can see females and males.
+
+So we can predict sex this way:
+
+sex <- factor(ifelse(chryexp<0,"F","M"))
+Calculating the PCs
+We have shown how we can compute principal components using:
+
+s <- svd(y)
+dim(s$v)
+## [1] 207 207
+We can also use prcomp which creates an object with just the PCs and also demeans by default. They provide practically the same principal components so we continue the analysis with the object s
+.
+
+Variance explained
+A first step in determining how much sample correlation induced structure there is in the data.
+
+library(RColorBrewer)
+cols=colorRampPalette(rev(brewer.pal(11,"RdBu")))(100)
+image ( cor(y) ,col=cols,zlim=c(-1,1))
+Image of correlations. Cell i,j  represents correlation between samples i and j. Red is high, white is 0 and red is negative.
+
+Here we are using the term structure to refer to the deviation from what one would see if the samples were in fact independent from each other. The plot above clearly shows groups of samples that are more correlated between themselves than to others.
+
+One simple exploratory plot we make to determine how many principal components we need to describe this structure is the variance-explained plot. This is what the variance explained for the PCs would look like if data were independent :
+
+y0 <- matrix( rnorm( nrow(y)*ncol(y) ) , nrow(y), ncol(y) )
+d0 <- svd(y0)$d
+plot(d0^2/sum(d0^2),ylim=c(0,.25))
+Variance explained plot for simulated independent data.
+
+Instead we see this:
+
+plot(s$d^2/sum(s$d^2))
+Variance explained plot for gene expression data.
+
+At least 20 or so PCs appear to be higher than what we would expect with independent data. A next step is to try to explain these PCs with measured variables. Is this driven by ethnicity? Sex? Date? Or something else?
+
+MDS plot
+As previously shown, we can make MDS plots to start exploring the data to answer these questions. One way to explore the relationship between variables of interest and PCs is to use color to denote these variables. For example, here are the first two PCs with color representing ethnicity:
+
+cols = as.numeric(eth)
+mypar()
+plot(s$v[,1],s$v[,2],col=cols,pch=16,
+     xlab="PC1",ylab="PC2")
+legend("bottomleft",levels(eth),col=seq(along=levels(eth)),pch=16)
+First two PCs for gene expression data with color representing ethnicity.
+
+There is a very clear association between the first PC and ethnicity. However, we also see that for the orange points there are sub-clusters. We know from previous analyses that ethnicity and preprocessing date are correlated:
+
+year = factor(format(dates,"%y"))
+table(year,eth)
+##     eth
+## year ASN CEU HAN
+##   02   0  32   0
+##   03   0  54   0
+##   04   0  13   0
+##   05  80   3   0
+##   06   2   0  23
+So explore the possibility of date being a major source of variability by looking at the same plot, but now with color representing year:
+
+cols = as.numeric(year)
+mypar()
+plot(s$v[,1],s$v[,2],col=cols,pch=16,
+     xlab="PC1",ylab="PC2")
+legend("bottomleft",levels(year),col=seq(along=levels(year)),pch=16)
+First two PCs for gene expression data with color representing processing year.
+
+We see that year is also very correlated with the first PC. So which variable is driving this? Given the high level of confounding, it is not easy to parse out. Nonetheless, in the assessment questions and below, we provide some further exploratory approaches.
+
+Boxplot of PCs
+The structure seen in the plot of the between sample correlations shows a complex structure that seems to have more than 5 factors (one for each year). It certainly has more complexity than what would be explained by ethnicity. We can also explore the correlation with months.
+
+month <- format(dates,"%y%m")
+length( unique(month))
+## [1] 21
+Because there are so many months (21), it becomes complicated to use color. Instead we can stratify by month and look at boxplots of our PCs:
+
+variable <- as.numeric(month)
+mypar(2,2)
+for(i in 1:4){
+  boxplot(split(s$v[,i],variable),las=2,range=0)
+  stripchart(split(s$v[,i],variable),add=TRUE,vertical=TRUE,pch=1,cex=.5,col=1)
+  }
+Boxplot of first four PCs stratified by month.
+
+Here we see that month has a very strong correlation with the first PC, even when stratifying by ethnic group as well as some of the others. Remember that samples processed between 2002-2004 are all from the same ethnic group. In cases such as these, in which we have many samples, we can use an analysis of variance to see which PCs correlate with month:
+
+corr <- sapply(1:ncol(s$v),function(i){
+  fit <- lm(s$v[,i]~as.factor(month))
+  return( summary(fit)$adj.r.squared  )
+  })
+mypar()
+plot(seq(along=corr), corr, xlab="PC")
+Adjusted R-squared after fitting a model with each month as a factor to each PC.
+
+We see a very strong correlation with the first PC and relatively strong correlations for the first 20 or so PCs. We can also compute F-statistics comparing within month to across month variability:
+
+Fstats<- sapply(1:ncol(s$v),function(i){
+   fit <- lm(s$v[,i]~as.factor(month))
+   Fstat <- summary(aov(fit))[[1]][1,4]
+   return(Fstat)
+  })
+mypar()
+plot(seq(along=Fstats),sqrt(Fstats))
+p <- length(unique(month))
+abline(h=sqrt(qf(0.995,p-1,ncol(s$v)-1)))
+Square root of F-statistics from an analysis of variance to explain PCs with month.
+
+We have seen how PCA combined with EDA can be a powerful technique to detect and understand batches. In a later section, we will see how we can use the PCs as estimates in factor analysis to improve model estimates.
+
+Adjusting with linear models exercises
+Exercises
+For the dataset we have been working with, models do not help due to the almost perfect confounding. This is one reason we created the subset dataset:
+
+library(GSE5859Subset)
+data(GSE5859Subset)
+Here we purposely confounded month and group (sex), but not completely:
+
+sex = sampleInfo$group
+month = factor( format(sampleInfo$date,"%m"))
+table( sampleInfo$group, month)
+Using the functions rowttests and qvalue compare the two groups. Because this is a smaller dataset which decreases our power, we will use the more lenient FDR cut-off of 10%.
+
+How many gene have q-values less than 0.1?
+
+Note that sampleInfo$group here presents males and females. Thus, we expect differences to be in on chrY and, for genes that escape inactivation, chrX. We do not expect many autosomal genes to be different between males and females. This gives us an opportunity to evaluate false and true positives with experimental data. For example, we evaluate results using the proportion genes of the list that are on chrX or chrY.
+
+For the list calculated above, what proportion of this list is on chrX or chrY?
+
+We can also check how many of the chromosomes X and Y genes we detected as different. How many are on Y?
+
+Now for the autosomal genes (not on chrX and chrY) for which q-value < 0.1, perform a t-test comparing samples processed in June to those processed in October.
+
+What proportion of these have p-values <0.05 ?
+
+The above result shows that the great majority of the autosomal genes show differences due to processing data. This provides further evidence that confounding is resulting in false positives. So we are going to try to model the month effect to better estimate the sex effect. We are going to use a linear model:
+
+Which of the following creates the appropriate design matrix?
+
+A) X = model.matrix(~sex+ethnicity)
+B) X = cbind(sex,as.numeric(month))
+C) It can’t be done with one line.
+D) X = model.matrix(~sex+month)
+Now use the X defined above, to fit a regression model using lm for each gene. You can obtain p-values for estimated parameters using summary. Here is an example
+
+ X = model.matrix(~sex+month)
+ i = 234
+ y = geneExpression[i,]
+ fit = lm(y~X)
+ summary(fit)$coef
+How many of the q-values for the group comparison are now <0.1?
+
+Note the big drop from what we obtained without the correction.
+
+With this new list, what proportion of these are chrX and chrY?
+
+Notice the big improvement.
+
+How many on Y or X?
+
+Now from the linear model above, extract the p-values related to the coefficient representing the October versus June differences using the same linear model.
+
+How many of the q-values for the month comparison are now <0.1?
+
+This approach is basically the approach implemented by Combat.
+
+Factor Analysis
+Factor Analysis
+Before we introduce the next type of statistical method for batch effect correction, we introduce the statistical idea that motivates the main idea: Factor Analysis. Factor Analysis was first developed over a century ago. Karl Pearson noted that correlation between different subjects when the correlation was computed across students. To explain this, he posed a model having one factor that was common across subjects for each student that explained this correlation:
+
+Yij=αiW1+εij
+with Yij
+ the grade for individual i
+ on subject j
+ and αi
+ representing the ability of student i
+ to obtain good grades.
+
+In this example, W1
+ is a constant. Here we will motivate factor analysis with a slightly more complicated situation that resembles the presence of batch effects. We generate a random N×6
+ matrix Y
+ with representing grades in six different subjects for N different children. We generate the data in a way that subjects are correlated with some more than others:
+
+Sample correlations
+Note that we observe high correlation across the six subjects:
+
+round(cor(Y),2)
+##          Math Science   CS  Eng Hist Classics
+## Math     1.00    0.67 0.64 0.34 0.29     0.28
+## Science  0.67    1.00 0.65 0.29 0.29     0.26
+## CS       0.64    0.65 1.00 0.35 0.30     0.29
+## Eng      0.34    0.29 0.35 1.00 0.71     0.72
+## Hist     0.29    0.29 0.30 0.71 1.00     0.68
+## Classics 0.28    0.26 0.29 0.72 0.68     1.00
+A graphical look shows that the correlation suggests a grouping of the subjects into STEM and the humanities.
+
+In the figure below, high correlations are red, no correlation is white and negative correlations are blue (code not shown).
+
+Images of correlation between columns. High correlation is red, no correlation is white, and negative correlation is blue.
+
+The figure shows the following: there is correlation across all subjects, indicating that students have an underlying hidden factor (academic ability for example) that results in subjects begin correlated since students that test high in one subject tend to test high in the others. We also see that this correlation is higher with the STEM subjects and within the humanities subjects. This implies that there is probably another hidden factor that determines if students are better in STEM or humanities. We now show how these concepts can be explained with a statistical model.
+
+Factor model
+Based on the plot above, we hypothesize that there are two hidden factors W1
+ and W2
+ and, to account for the observed correlation structure, we model the data in the following way:
+
+Yij=αi,1W1,j+αi,2W2,j+εij
+The interpretation of these parameters are as follows: αi,1
+ is the overall academic ability for student i
+ and αi,2
+ is the difference in ability between the STEM and humanities for student i
+. Now, can we estimate the W
+ and α
+ ?
+
+Factor analysis and PCA
+It turns out that under certain assumptions, the first two principal components are optimal estimates for W1
+ and W2
+. So we can estimate them like this:
+
+s <- svd(Y)
+What <- t(s$v[,1:2])
+colnames(What)<-colnames(Y)
+round(What,2)
+##       Math Science    CS  Eng Hist Classics
+## [1,]  0.36    0.36  0.36 0.47 0.43     0.45
+## [2,] -0.44   -0.49 -0.42 0.34 0.34     0.39
+As expected, the first factor is close to a constant and will help explain the observed correlation across all subjects, while the second is a factor differs between STEM and humanities. We can now use these estimates in the model:
+
+Yij=αi,1W^1,j+αi,2W^2,j+εij
+and we can now fit the model and note that it explains a large percent of the variability.
+
+fit = s$u[,1:2]%*% (s$d[1:2]*What)
+var(as.vector(fit))/var(as.vector(Y))
+## [1] 0.7880933
+The important lesson here is that when we have correlated units, the standard linear models are not appropriate. We need to account for the observed structure somehow. Factor analysis is a powerful way of achieving this.
+
+Factor analysis in general
+In high-throughput data, it is quite common to see correlation structure. For example, notice the complex correlations we see across samples in the plot below. These are the correlations for a gene expression experiment with columns ordered by date:
+
+library(Biobase)
+library(GSE5859)
+data(GSE5859)
+n <- nrow(pData(e))
+o <- order(pData(e)$date)
+Y=exprs(e)[,o]
+cors=cor(Y-rowMeans(Y))
+cols=colorRampPalette(rev(brewer.pal(11,"RdBu")))(100)
+
+mypar()
+image(1:n,1:n,cors,xaxt="n",yaxt="n",col=cols,xlab="",ylab="",zlim=c(-1,1))
+Image of correlations. Cell i,j  represents correlation between samples i and j. Red is high, white is 0 and red is negative.
+
+Two factors will not be enough to model the observed correlation structure. However, a more general factor model can be useful:
+
+Yij=∑k=1Kαi,kWj,k+εij
+And we can use PCA to estimate W1,…,WK
+. However, choosing k
+ is a challenge and a topic of current research. In the next section we describe how exploratory data analysis might help.
+
+Factor Analysis Exercises
+Exercises
+We will continue to use this dataset:
+
+library(Biobase)
+library(GSE5859Subset)
+data(GSE5859Subset)
+Suppose you want to make an MA plot of the first two samples y = geneExpression[,1:2]. Which of the following projections gives us the projection of y
+ so that column2 versus column 1 is an MA plot?
+
+A.y(1/2–√12–√1/2–√−1/2–√)B.y(111−1)C.(111−1)yD.(111−1)y⊤
+Say Y
+ is M×N
+, in the SVD Y=UDV⊤
+ which of the following is not correct?
+
+A) DV⊤
+ are the new coordinates for the projection U⊤Y
+B) UD
+ are the new coordinates for the projection YV
+C) D
+ are the coordinates of the projection U⊤Y
+D) U⊤Y
+ is a projection from an N
+-dimensional to M
+-dimensional subspace.
+Define:
+
+ y = geneExpression - rowMeans(geneExpression)
+Compute and plot an image of the correlation for each sample. Make two image plots of these correlations. In the first one, plot the correlation as image. In the second, order the samples by date and then plot an image of the correlation. The only difference in these plots is the order in which the samples are plotted.
+
+Based on these plots, which of the following you would say is true?
+
+A) The samples appear to be completely independent of each other.
+B) Sex seems to be creating structures as evidenced by the two cluster of highly correlated samples.
+C) There appear to be only two factors completely driven by month.
+D) The fact that in the plot ordered by month we see two groups mainly driven by month, and within these we see subgroups driven by date, seems to suggest date more than month per se are the hidden factors.
+Based on the correlation plots above, we could argue that there are at least two hidden factors. Using PCA estimate these two factors. Specifically, apply the svd to y and use the first two PCs as estimates.
+
+Which command gives us these estimates?
+
+A) pcs = svd(y)$v[1:2,]
+B) pcs = svd(y)$v[,1:2]
+C) pcs = svd(y)$u[,1:2]
+D) pcs = svd(y)$d[1:2]
+Plot each of the estimated factors ordered by date. Use color to denote month. The first factor is clearly related to date. Which of the following appear to be most different according to this factor?
+A) June 23 and June 27
+B) Oct 07 and Oct 28
+C) June 10 and June 23
+D) June 15 and June 24
+Use the svd function to obtain the principal components (PCs) for our detrended gene expression data y.
+
+How many PCs explain more than 10% of the variability?
+
+Which PC most correlates (negative or positive correlation) with month?
+
+What is this correlation (in absolute value)?
+
+Which PC most correlates (negative or positive correlation) with sex?
+
+What is this correlation (in absolute value)?
+
+Now instead of using month, which we have shown does not quite describe the batch, add the two estimated factors s$v[,1:2] to the linear model we used above. Apply this model to each gene and compute q-values for the sex difference. How many q-values <
+ 0.1 for the sex comparison?
+
+What proportion of the genes are on chromosomes X and Y?
+
+Modeling Batch Effects with Factor Analysis
+Modeling Batch Effects with Factor Analysis
+We continue to use this data set:
+
+library(GSE5859Subset)
+data(GSE5859Subset)
+Below is the image we showed earlier with a subset of genes showing both the sex effect and the month time effects, but now with an image showing the sample to sample correlations (computed on all genes) showing the complex structure of the data (code not shown):
+
+Image of subset gene expression data (left) and image of correlations for this dataset (right).
+
+We have seen how the approach that assumes month explains the batch and adjusts with linear models perform relatively well. However, there was still room for improvement. This is most likely due to the fact that month is only a surrogate for some hidden factor or factors that actually induces structure or between sample correlation.
+
+What is a batch?
+Here is a plot of dates for each sample, with color representing month:
+
+times <-sampleInfo$date 
+mypar(1,1)
+o=order(times)
+plot(times[o],pch=21,bg=as.numeric(batch)[o],ylab="date")
+o=order(times)
+plot(times[o],pch=21,bg=as.numeric(batch)[o],ylab="date")
+Dates with color denoting month.
+
+We note that there is more than one day per month. Could day have an effect as well? We can use PCA and EDA to try to answer this question. Here is a plot of the first principal component ordered by date:
+
+s <- svd(y)
+mypar(1,1)
+o<-order(times)
+cols <- as.numeric( batch)
+plot(s$v[o,1],pch=21,cex=1.25,bg=cols[o],ylab="First PC",xaxt="n",xlab="")
+legend("topleft",c("Month 1","Month 2"),col=1:2,pch=16,box.lwd=0)
+First PC plotted against ordered by date with colors representing month.
+
+Day seems to be highly correlated with the first PC, which explains a high percentage of the variability:
+
+mypar(1,1)
+plot(s$d^2/sum(s$d^2),ylab="% variance explained",xlab="Principal component")
+Variance explained.
+
+Further exploration shows that the first six or so PC seem to be at least partially driven by date:
+
+mypar(3,4)
+for(i in 1:12){
+  days <- gsub("2005-","",times)  
+  boxplot(split(s$v[,i],gsub("2005-","",days)))
+}
+First 12 PCs stratified by dates.
+
+So what happens if we simply remove the top six PC from the data and then perform a t-test?
+
+D <- s$d; D[1:4]<-0 #take out first 2
+cleandat <- sweep(s$u,2,D,"*")%*%t(s$v)
+res <-rowttests(cleandat,factor(sex))
+This does remove the batch effect, but it seems we have also removed much of the biological effect we are interested in. In fact, no genes have q-value <0.1 anymore.
+
+library(qvalue)
+mypar(1,2)
+hist(res$p.value[which(!chr%in%c("chrX","chrY") )],main="",ylim=c(0,1300))
+
+plot(res$dm,-log10(res$p.value))
+points(res$dm[which(chr=="chrX")],-log10(res$p.value[which(chr=="chrX")]),col=1,pch=16)
+points(res$dm[which(chr=="chrY")],-log10(res$p.value[which(chr=="chrY")]),col=2,pch=16,xlab="Effect size",ylab="-log10(p-value)")
+legend("bottomright",c("chrX","chrY"),col=1:2,pch=16)
+p-value histogram and volcano plot after blindly removing the first two PCs.
+
+qvals <- qvalue(res$p.value)$qvalue
+index <- which(qvals<0.1)
+
+cat("Total genes with q-value < 0.1: ",length(index),"\n",
+    "Number of selected genes on chrY: ", sum(chr[index]=="chrY",na.rm=TRUE),"\n",
+    "Number of selected genes on chrX: ", sum(chr[index]=="chrX",na.rm=TRUE),sep="")
+## Total genes with q-value < 0.1: 0
+## Number of selected genes on chrY: 0
+## Number of selected genes on chrX: 0
+In this case we seem to have over corrected since we now recover many fewer chromosome Y genes and the p-value histogram shows a dearth of small p-values that makes the distribution non-uniform. Because sex is probably correlated with some of the first PCs, this may be a case of “throwing out the baby with the bath water”.
+
+
+Surrogate Variable Analysis
+A solution to the problem of over-correcting and removing the variability associated with the outcome of interest is fit models with both the covariate of interest, as well as those believed to be batches. An example of an approach that does this is Surrogate Variable Analysis (SVA).
+
+The basic idea of SVA is to first estimate the factors, but taking care not to include the outcome of interest. To do this, an interactive approach is used in which each row is given a weight that quantifies the probability of the gene being exclusively associated with the surrogate variables and not the outcome of interest. These weights are then used in the SVD calculation with higher weights given to rows not associated with the outcome of interest and associated with batches. Below is a demonstration of two iterations. The three images are the data multiplied by the weight (for a subset of genes), the weights, and the estimated first factor (code not shown).
+
+## Loading required package: mgcv
+## Loading required package: nlme
+## This is mgcv 1.8-7. For overview type 'help("mgcv-package")'.
+## Number of significant surrogate variables is:  5 
+## Iteration (out of 1 ):1
+## Number of significant surrogate variables is:  5 
+## Iteration (out of 2 ):1  2
+Illustration of iterative procedure used by SVA. Only two iterations are shown.
+
+The algorithm iterates this procedure several times (controlled by B argument) and returns an estimate of the surrogate variables, which are analogous to the hidden factors of factor analysis. To actually run SVA, we run the sva function. In this case, SVA picks the number of surrogate values or factors for us.
+
+library(limma)
+svafit <- sva(geneExpression,mod)
+## Number of significant surrogate variables is:  5 
+## Iteration (out of 5 ):1  2  3  4  5
+svaX<-model.matrix(~sex+svafit$sv)
+lmfit <- lmFit(geneExpression,svaX)
+tt<- lmfit$coef[,2]*sqrt(lmfit$df.residual)/(2*lmfit$sigma)
+There is an improvement over previous approaches:
+
+res <- data.frame(dm= -lmfit$coef[,2],
+                  p.value=2*(1-pt(abs(tt),lmfit$df.residual[1]) ) )
+mypar(1,2)
+hist(res$p.value[which(!chr%in%c("chrX","chrY") )],main="",ylim=c(0,1300))
+
+plot(res$dm,-log10(res$p.value))
+points(res$dm[which(chr=="chrX")],-log10(res$p.value[which(chr=="chrX")]),col=1,pch=16)
+points(res$dm[which(chr=="chrY")],-log10(res$p.value[which(chr=="chrY")]),col=2,pch=16,xlab="Effect size",ylab="-log10(p-value)")
+legend("bottomright",c("chrX","chrY"),col=1:2,pch=16)
+p-value histogram and volcano plot obtained with SVA.
+
+qvals <- qvalue(res$p.value)$qvalue
+index <- which(qvals<0.1)
+
+cat("Total genes with q-value < 0.1: ",length(index),"\n",
+    "Number of selected genes on chrY: ", sum(chr[index]=="chrY",na.rm=TRUE),"\n",
+    "Number of selected genes on chrX: ", sum(chr[index]=="chrX",na.rm=TRUE),sep="")
+## Total genes with q-value < 0.1: 14
+## Number of selected genes on chrY: 5
+## Number of selected genes on chrX: 8
+To visualize what SVA achieved, below is a visualization of the original dataset decomposed into sex effects, surrogate variables, and independent noise estimated by the algorithm (code not shown):
+
+Original data split into three sources of variability estimated by SVA: sex-related signal, surrogate-variable induced structure and indepedent error.
+
+Adjusting with factor analysis exercises
+Exercises
+In this section we will use the sva function in the sva package (available from Bioconductor) and apply it to the following data:
+
+library(sva)
+library(Biobase)
+library(GSE5859Subset)
+data(GSE5859Subset)
+In a previous section we estimated factors using PCA, but we noted that the first factor was correlated with our outcome of interest:
+
+ s <- svd(geneExpression-rowMeans(geneExpression))
+ cor(sampleInfo$group,s$v[,1])
+The svafit function estimates factors, but downweighs the genes that appear to correlate with the outcome of interest. It also tries to estimate the number of factors and returns the estimated factors like this:
+
+ sex = sampleInfo$group
+ mod = model.matrix(~sex)
+ svafit = sva(geneExpression,mod)
+ head(svafit$sv)
+The resulting estimated factors are not that different from the PCs.
+
+ for(i in 1:ncol(svafit$sv)){
+   print( cor(s$v[,i],svafit$sv[,i]) )
+   }
+Now fit a linear model to each gene that instead of month includes these factors in the model. Use the qvalue function.
+
+How many genes have q-value < 0.1?
+
+How many of these genes are from chrY or chrX?

@@ -1,0 +1,136 @@
+Optimizing Machine Learning Models in Python
+
+Feature engineering
+Feature engineering is the process of taking features or predictors in the data and transforming them into a format that improves predictions. Feature engineering is also known as feature extraction. A feature or predictor is a numeric representation of our raw data.
+
+Features can be continuous or categorical, but feature engineering requires us to look at other aspects of these data. This includes the following:
+
+Sign: refers to a feature's positivity or negativity. This can be important when we use aggregated values or count values, like daily visits to a website or to a restaurant.
+Scale: refers to a feature's size might be. We might need to check if different features span different orders of magnitude since this might affect prediction accuracy.
+Distribution: refers to how common specific values of a feature are relative to others. We may find that a feature takes values in some typical range, and that there might be outliers that are far away from this typical set.
+
+imp.fit_transform(X)
+
+1.Univariate Imputation
+complete case analysis 
+missing data: NAN null None
+
+copy() drop(列名，axis=1) 
+from sklearn.impute import SimpleImputer
+sklearn.impute.SimpleImputer处理（missing_values,method）时如果strategy = 'mean' 要注意data不能有非数值型，而且事后要加回data.columns
+
+2.K-Nearest Neighbors  Imputation
+Both univariate and K-nearest neighbors imputation can take an average to fill in missing values, so how do we distinguish between the two? They differ in which observations from which to take an average. Univariate imputation uses all of the observations to form the average, while the K-nearest neighbors only uses the observations it counts as neighbors.
+
+from sklearn.impute import KNNImputer
+
+3.Outlier Detection
+Q1 Q2 Q3 IQR lower/upper bound 1.5*IQR
+np.percentile(data,percentiles)
+
+4.Z-Scores
+(x-mean)/std
+[-3,3]
+
+One of the reasons behind this discrepancy is an implicit assumption we need to make when using Z-scores: we assume the data is normally distributed. Let's check this assumption by looking at the histogram for it.
+
+
+5.Handling Outliers
+
+We've learned how to detect outliers using imputation, but we haven't really examined what we should do about them. Handling outliers can be difficult because we have to carefully examine the data and make a judgment: does this outlier stem from a data collection error or from the underlying nature of the data?
+
+The former case is easier to handle. If the outlier represents some kind of random mistake from data collection, then we can treat it like a missing data problem. The data is observed, but it's incorrect, so we can try to remove this observation or use the imputation methods we learned earlier. Sometimes it's easy to spot this type of outlier. If all of the values of a column range from 0 to 10 except for an outlier that has a value of 10000, then we should either remove it or impute it.
+
+The more difficult case is when we believe that the outlier may have happened naturally for that feature; extreme values are normal in some cases. For example, stock prices may vary, historically, within a small range for most of its existence. Then, rare events like a recession may suddenly spike or flatten the price. In this case, some force is causing the extreme value, not some random measurement error. If we were to ignore these extreme stock prices in a machine learning model, we run the risk of heavily biasing the model because we are essentially ignoring an important phenomenon that caused the change.
+
+Because of this, we must resolve outliers on a case-by-case basis. Every dataset is created under different circumstances, so the best thing we can do is examine the data and make a judgment. Here are a few heuristics to follow:
+
+As mentioned above, if the outlier seems to be the result of a random mistake, then exclude it or use imputation to make a better guess as to the outlier value.
+In the presence of outliers, repeat the analysis under different circumstances: try including them, and then try excluding them. There may be a lucky case where the outlier does not really affect the model predictions. Otherwise, it's important to document this finding.
+Be transparent. Use either a box plot or the z-score to identify outliers and make it clear in your report how many there are and which columns contain them. If your model predictions seem off, then they might be a potential cause. In either case, documenting whether or not you include them can help your teammates decide how to proceed.
+
+6.Imbalanced Dataset
+downsampling
+upweighting
+
+pd.concat([A,B])
+
+model = LogisticRegression(class_weights="balanced")
+model.fit(X, y)
+
+
+Model Selection
+Often, we won't know beforehand which features to use or engineer for our models, especially when there are many features to choose from. It would be nice if we could determine which features to use before we invest any time in feature engineering. Instead of having just one model, we'll often need to craft multiple models with different combinations of features to try to maximize predictive ability.
+1.Sequential Feature Selection(subset selection)
+forward selelction
+ In forward selection, we start with an intercept-only model (a regression model without predictors). Then, the algorithm iterates over each feature in the dataset to see which one would produce the best model if it were added. The metric used to define "best" is a cross-validation score such as MSE or accuracy. After iterating through each feature, the one that produces the best metric is added to the model. Once this feature is added, this process is repeated until we reach some pre-specified number of features or the metric does not improve substantially with the addition of more features.
+
+For now, we'll consider three parameters when dealing with the SequentialFeatureSelector class:
+
+estimator: this is an object used to construct the models during feature selection, such as LinearRegression or RandomForestClassifier.
+n_features_to_select: this is a positive integer that describes how many features we want to be used in the resulting model.
+direction: this is a string that describes the type of sequential feature selection we want to do ("forward" or "backward") as a string.
+It's important to note that filling in the parameters above merely describes a sort of "plan" for what we want to do. No fitting is done yet, so we must call the fit() method in order to actually perform the feature selection.
+
+SequentialFeatureSelector(estimator,n_features_to_select,direction),fit,get_feature_names_out
+estimator can be linear model, Random Forest Classifier
+
+backward selection
+
+metrics:MSE(cross validation score)
+
+Model Selection
+Cross-Validation
+Regularization
+Going Beyond Linear Models
+Guided Project: Optimizing Model Prediction
+
+Feature Engineering
+1h
+Lesson Objectives
+Resolve missing values using imputation
+Detect and address outliers
+Resolve class imbalance in classification problems
+
+Model Selection
+1h
+Lesson Objectives
+Choose an optimal set of predictors to use in a model
+Use model selection metrics for choosing an optimal model
+Use sequential feature selection to choose a set of features for a model
+Identify how high dimensional problems influence model selection
+
+Cross-Validation
+1h
+Lesson Objectives
+Understand the role of cross-validation in the machine learning workflow
+Use k-fold cross-validation to check model performance
+Use LOOCV cross-validation to check model performance
+Understand the bias-variance trade-off when choosing the number of folds
+
+Regularization(prevent overfitting)
+1h
+Lesson Objectives
+Identify the role of regularization in machine learning
+Use regularized versions of linear regression
+Identify the difference between ridge and LASSO regression
+Standardize the features using helper functions in scikit-learn
+
+Going Beyond Linear Models
+1h
+Lesson Objectives
+Implement polynomial regression in scikit-learn
+Define piecewise functions and splines
+Implement regression splines in scikit-learn
+Establish best practices concerning splines
+
+Guided Project: Optimizing Model Prediction
+1h
+Lesson Objectives
+Iterate on and optimize a previous model
+Use k-fold cross-validation for model selection
+Use non-linear models to improve model prediction
+
+
+
+

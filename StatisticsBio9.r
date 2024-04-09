@@ -283,248 +283,91 @@ Y = y[ind]
 X = x[ind]
 #Use loess to estimate $$f(x)=E(Y	X=x)usingthedefaultparameters.Whatisthepredicted
 #f(168)$?
-fit <- loess(Y~X, degree=1, span=1/3)
-
-newx <- seq(167.5,168.4,len=10) 
-smooth <- predict(fit,newdata=data.frame(X=newx))
-#1         2         3         4         5         6         7 
-#0.6235645 0.6137356 0.6038124 0.5937944 0.5836811 0.5734721 0.5634540 
-#8         9        10 
-#0.5538947 0.5447651 0.5360362 
-
-par ()
-plot(X,Y,col="darkgrey",pch=16)
-lines(newx,smooth,col="black",lwd=3)
-mean(smooth)
-#[1] 0.579021
-round(smooth)
-#1  2  3  4  5  6  7  8  9 10 
-#1  1  1  1  1  1  1  1  1  1 
-
 #The loess estimate above is a random variable. We can compute standard errors for it. Here we use Monte Carlo to demonstrate that it is a random variable. Use Monte Carlo simulation to estimate the standard error of your estimate of f(168).
+Smoothing exercises
+Exercises
+Generate the following data:
+  
+  n = 10000
+set.seed(1)
+men = rnorm(n,176,7) #height in centimeters
+women = rnorm(n,162,7) #height in centimeters
+y = c(rep(0,n),rep(1,n))
+x = round(c(men,women))
+##mix it up
+ind = sample(seq(along=y))
+y = y[ind]
+x = x[ind]
+Set the seed at 5, set.seed(5) and take a random sample of 250 from:
+  
+  set.seed(5)
+N = 250
+ind = sample(length(y),N)
+Y = y[ind]
+X = x[ind]
+Use loess to estimate $$f(x)=E(Y	X=x)usingthedefaultparameters.Whatisthepredicted
+f(168)$?
+  The loess estimate above is a random variable. We can compute standard errors for it. Here we use Monte Carlo to demonstrate that it is a random variable. Use Monte Carlo simulation to estimate the standard error of your estimate of f(168)
+.
+
+Set the seed to 5, set.seed(5) and perform 10000 simulations and report the SE of the loess based estimate.
+
+Smoothing exercises
+Exercises
+Generate the following data:
+  
+  n = 10000
+set.seed(1)
+men = rnorm(n,176,7) #height in centimeters
+women = rnorm(n,162,7) #height in centimeters
+y = c(rep(0,n),rep(1,n))
+x = round(c(men,women))
+##mix it up
+ind = sample(seq(along=y))
+y = y[ind]
+x = x[ind]
+Set the seed at 5, set.seed(5) and take a random sample of 250 from:
+  
+  set.seed(5)
+N = 250
+ind = sample(length(y),N)
+Y = y[ind]
+X = x[ind]
+Use loess to estimate $$f(x)=E(Y	X=x)usingthedefaultparameters.Whatisthepredicted
+f(168)$?
+  The loess estimate above is a random variable. We can compute standard errors for it. Here we use Monte Carlo to demonstrate that it is a random variable. Use Monte Carlo simulation to estimate the standard error of your estimate of f(168)
+.
+
+Set the seed to 5, set.seed(5) and perform 10000 simulations and report the SE of the loess based estimate.
+
+Smoothing exercises
+Exercises
+Generate the following data:
+  
+  n = 10000
+set.seed(1)
+men = rnorm(n,176,7) #height in centimeters
+women = rnorm(n,162,7) #height in centimeters
+y = c(rep(0,n),rep(1,n))
+x = round(c(men,women))
+##mix it up
+ind = sample(seq(along=y))
+y = y[ind]
+x = x[ind]
+Set the seed at 5, set.seed(5) and take a random sample of 250 from:
+  
+  set.seed(5)
+N = 250
+ind = sample(length(y),N)
+Y = y[ind]
+X = x[ind]
+Use loess to estimate $$f(x)=E(Y	X=x)usingthedefaultparameters.Whatisthepredicted
+f(168)$?
+  The loess estimate above is a random variable. We can compute standard errors for it. Here we use Monte Carlo to demonstrate that it is a random variable. Use Monte Carlo simulation to estimate the standard error of your estimate of f(168)
+.
+
+Set the seed to 5, set.seed(5) and perform 10000 simulations and report the SE of the loess based estimate.
+
+gHKJ %>% %>% %>% 
 #Set the seed to 5, set.seed(5) and perform 10000 simulations and report the SE of the loess based estimate.
-
-#'''smooth<-function(h){
-#  #f(168)$?
-#  n = 10000
-#  set.seed(1)
-#  men = rnorm(n,176,7) #height in centimeters
-#  women = rnorm(n,162,7) #height in centimeters
-#  y = c(rep(0,n),rep(1,n))
-#  x = round(c(men,women))
-#  ##mix it up
-#  ind = sample(seq(along=y))
-#  y = y[ind]
-#  x = x[ind]
-#  
-#  set.seed(5)
-#  m = 250
-#  ind = sample(length(y),m)
-#  Y = y[ind]
-#  X = x[ind]
-#  fit <- loess(Y~X, degree=1, span=1/3)
-#  newx <- seq(h-0.5,h+0.4,len=10) 
-#  mean(predict(fit,newdata=data.frame(X=newx)))
-#}
-#set.seed(5)
-#N = 10000
-#fits<-rep(sapply(168,smooth),N)
-#SE<-sd(fits)'''
-
-set.seed(5)
-N = 10000
-smooth0<-function (x,y,h){
-  m = 250
-  ind = sample(length(y),m)
-  Y = y[ind]
-  X = x[ind]
-  fit <- loess(Y~X, degree=1, span=1/3)
-  newx <- seq(h-0.5,h+0.4,len=10) 
-  mean(predict(fit,newdata=data.frame(X=newx)))-sum(y[which(x == h)])/length(y[which(x == 168)])
-}
-#resfits<-rep(smooth0(x,y,168),N)
-
-smooth<-function (x,y,h){
-  m = 250
-  ind = sample(length(y),m)
-  Y = y[ind]
-  X = x[ind]
-  fit <- loess(Y~X, degree=1, span=1/3)
-  newx <- seq(h-0.5,h+0.4,len=10) 
-  mean(predict(fit,newdata=data.frame(X=newx)))
-}
-set.seed(5)
-fits = rep(0,N)
-ress = rep(0,N)
-for (i in 1:N){
-#  set.seed(1)
-  men = rnorm(n,176,7) #height in centimeters
-  women = rnorm(n,162,7) #height in centimeters
-  y = c(rep(0,n),rep(1,n))
-  x = round(c(men,women))
-  ##mix it up
-  ind = sample(seq(along=y))
-  y = y[ind]
-  x = x[ind]
-  fits[i] = smooth(x,y,168)
-  ress[i] = sum(y[which(x == 168)])/length(y[which(x == 168)])-fits[i]
-}
-sum(ress^2)/N
-#[1] 0.004264523
-plot(ress,main = paste0('SE = ',sum(ress^2)/N))
-
-#Cross-validation Exercises
-#Exercises
-#Load the following dataset:
-if(!require(caret)) install.packages('caret')
-library(caret)  
-if(!require(class)) install.packages('class')
-library(class)  
-library(GSE5859Subset)
-data(GSE5859Subset)
-#And define the outcome and predictors. To make the problem more difficult, we will only consider autosomal genes:
-  
-y = factor(sampleInfo$group)
-X = t(geneExpression)
-out = which(geneAnnotation$CHR%in%c("chrX","chrY"))
-X = X[,-out]
-#Use the createFold function in the caret package, set the seed to 1 set.seed(1) and create 10 folds.
-set.seed(1)
-indx<-createFolds(y, k=10)
-#Question: What is the 2nd entry in the fold 3?
-#indx$Fold03
-#[1] 11 17
-#y[indx[[2]]]
-#We are going to use kNN. We are going to consider a smaller set of predictors by using filtering genes using t-tests. Specifically, we will perform a t-test and select the m
-#genes with the smallest p-values.
-
-#Let m=8
-#and k=5
-#and train kNN by leaving out the second fold idx[[2]]. How many mistakes do we make on the test set? Remember it is indispensable that you perform the t-test on the training data.
-library('genefilter')
-rts<-rowttests(geneEXpression)
-data = geneExpression[which(order(rts$p.value) <9),]
-pred<-knn3Train(train=t(data[,-indx[[2]]]),test = t(data[,indx[[2]]]),cl=y[-indx[[2]]],k=5)
-table(true = y[indx[[2]]],pred)
-#    pred
-#true 0 1
-#   0 1 0
-#   1 0 1
-
-#Now run through all 5 folds. What is our error rate?
-pred1<-knn3Train(train=t(data[,-c(indx[[1]],indx[[2]],indx[[3]],indx[[4]],indx[[5]])]),test = t(data[,c(indx[[1]],indx[[2]],indx[[3]],indx[[4]],indx[[5]])]),cl=y[-c(indx[[1]],indx[[2]],indx[[3]],indx[[4]],indx[[5]])],k=5)
-mean(y[c(indx[[1]],indx[[2]],indx[[3]],indx[[4]],indx[[5]])]!=pred1)
-#[1] 0.2727273
-#Now we are going to select the best values of k and m. Use the expand grid function to try out the following values:
-  
-ms=2^c(1:11)
-#ks=seq(1,9,2)
-ks = 1:5
-indxs = c(list(indx[[1]]),list(c(indx[[1]],indx[[2]],indx[[3]])),list(c(indx[[1]],indx[[2]],indx[[3]],indx[[4]],indx[[5]])),list(c(indx[[1]],indx[[2]],indx[[3]],indx[[4]],indx[[5]],indx[[6]],indx[[7]])),list(c(indx[[1]],indx[[2]],indx[[3]],indx[[4]],indx[[5]],indx[[6]],indx[[7]],indx[[8]],indx[[9]])))
-params = expand.grid(k=ks,m=ms)
-#Now use apply or a for-loop to obtain error rates for each of these pairs of parameters. Which pair of parameters minimizes the error rate?
-set.seed(1)
-res <- sapply(params, function(params) {
-  ##try out each version of k from 1 to 5
-  res.k <- sapply(seq_along(params), function(i) {
-    ##loop over each of the 10 cross-validation folds
-    ##predict the held-out samples using k nearest neighbors
-    predtmp <- knn(train=t(geneExpression[params$m,-indxs[params$k]]),
-                test=t(geneExpresion[params$m,indxs[params$k]]),
-                cl=y[-indxs[params$k]], k = length(y[-params$k]))
-    ##the ratio of misclassified samples
-    mean(y[indxs[params$k]] != predtmp)
-  })
-  ##average over the folds
-  mean(res.k)
-})
-resks = rep(0,length(params))
-resk<-function(m,k) {
-    ##loop over each of the 10 cross-validation folds
-    ##predict the held-out samples using k nearest neighbors
-    predtmp <- knn3Train(train=t(geneExpression[1:m,-indxs[[k]]]),
-                   test=t(geneExpression[1:m,indxs[[k]]]),
-                   cl=y[-indxs[[k]]], k = length(y[indxs[[k]]]))
-    ##the ratio of misclassified samples
-    mean(y[indxs[[k]]] != predtmp)
-}
-#resks<-sapply(seq_along(params),resk)
-for(i in 1:dim(params)[1]){
-  mi = params$m[i]
-  ki = params$k[i]
-  resks[i] = resk(mi,ki)
-}
-par(mfrow = c(1,2))
-plot(params$m,resks,type = 'o',ylab = 'misclassifiation error')
-plot(resks,type = 'o',ylab = 'misclassifiation error')
-which(order(resks) == 1)
-#[1] 35
-params$k[which(order(resks) == 1)]
-#[1] 5
-params$m[which(order(resks) == 1)]
-#[1] 128
-indxs[[params$k[which(order(resks) == 1)]]]
-#[1]  6 14 10 15 11 17 12 16 23  4 21  5  9 18  2 13  8 20  3 22 24
-k = length(indxs[[params$k[which(order(resks) == 1)]]])
-k
-#[1] 21
-#Repeat exercise 4, but now perform the t-test filtering before the cross validation. Note how this biases the entire result and gives us much lower estimated error rates.
-rts<-rowttests(geneEXpression)
-pred<-knn3Train(train=t(data[,-indx[[2]]]),test = t(data[,indx[[2]]]),cl=y[-indx[[2]]],k=5)
-table(true = y[indx[[2]]],pred)
-reskprefm<-function(m,k) {
-  data = geneExpression[which(order(rts$p.value) <=m),]
-  ##predict the held-out samples using k nearest neighbors
-  predtmp <- knn3Train(train=t(data[,-indxs[[k]]]),
-                       test=t(data[,indxs[[k]]]),
-                       cl=y[-indxs[[k]]], k = length(y[indxs[[k]]]))
-  ##the ratio of misclassified samples
-  mean(y[indxs[[k]]] != predtmp)
-}
-reskprefms = rep(0,length(params))
-for(i in 1:dim(params)[1]){
-  mi = params$m[i]
-  ki = params$k[i]
-  reskprefms[i] = reskprefm(mi,ki)
-}
-par(mfrow = c(1,2))
-plot(params$m,reskprefms,type = 'o',ylab = 'misclassifiation error')
-plot(reskprefms,type = 'o',ylab = 'misclassifiation error')
-which(order(reskprefms) == 1)
-#[1] 35
-params$k[which(order(reskprefms) == 1)]
-#[1] 5
-params$m[which(order(reskprefms) == 1)]
-#[1] 128
-indxs[[params$k[which(order(reskprefms) == 1)]]]
-#[1]  6 14 10 15 11 17 12 16 23  4 21  5  9 18  2 13  8 20  3 22 24
-k = length(indxs[[params$k[which(order(reskprefms) == 1)]]])
-k
-#[1] 21
-par(mfrow = c(2,2))
-plot(params$m,reskprefms,col = 1,ylab = 'm-prefiltered misclassifiation error')
-plot(params$m,resks,col =2,ylab = 'misclassifiation error')
-plot(reskprefms,col = 1,ylab = 'm-prefilltered misclassifiation error')
-plot(resks,col =2,ylab = 'misclassifiation error')
-
-#mean(resks)
-#[1] 0.3197757
-#mean(reskprefms)
-#[1] 0.3258707
-
-#Repeat exercise 3, but now, instead of sampleInfo$group , use
-y1 = factor(as.numeric(format( sampleInfo$date, "%m")=="06"))
-#What is the minimum error rate now?
-pred<-knn3Train(train=t(data[,-indx[[2]]]),test = t(data[,indx[[2]]]),cl=y1[-indx[[2]]],k=5)
-table(true = y1[indx[[2]]],pred)
-#    pred
-#true 0
-#   0 1
-#   1 1
-
-#Now run through all 5 folds. What is our error rate?
-pred11<-knn3Train(train=t(data[,-c(indx[[1]],indx[[2]],indx[[3]],indx[[4]],indx[[5]])]),test = t(data[,c(indx[[1]],indx[[2]],indx[[3]],indx[[4]],indx[[5]])]),cl=y[-c(indx[[1]],indx[[2]],indx[[3]],indx[[4]],indx[[5]])],k=5)
-mean(y1[c(indx[[1]],indx[[2]],indx[[3]],indx[[4]],indx[[5]])]!=pred11)
-#[1] 0.8181818
-#We achieve much lower error rates when predicting date than when predicting the group. Because group is confounded with date, it is very possible that these predictors have no information about group and that our lower 0.5 error rates are due to the confounding with date. We will learn more about this in the batch effect chapter.
 
